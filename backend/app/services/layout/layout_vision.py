@@ -16,40 +16,120 @@ from app.models.layout import LayoutAnalysis
 
 logger = get_logger("layout.vision")
 
-# Fallback if prompts/layout_vision.md is missing (same content as default file)
-_LAYOUT_VISION_PROMPT_FALLBACK = """You are analyzing a floor plan image (apartment, villa, or office). Extract dimensions and areas.
+_ALLOWED_ROOM_TYPES = {
+    "living",
+    "bedroom",
+    "bathroom",
+    "kitchen",
+    "entry",
+    "workspace",
+    "meeting",
+    "other",
+}
 
-**Units:** Detect the measurement units used on the plan (scale, dimensions, labels). Use the SAME units consistently for all dimensions and areas (e.g. if the plan shows meters, use "m" and "sq m"; if feet, use "ft" and "sq ft"). Do not mix units.
+def _normalize_room_type(rt: str | None) -> str:
+    if not rt:
+        return "other"
+    rt = rt.lower().strip()
+    return rt if rt in _ALLOWED_ROOM_TYPES else "other"
 
-Reply with ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
+
+_LAYOUT_VISION_PROMPT_FALLBACK = """You are analyzing a floor plan image (apartment, villa, or office).
+
+========================
+CRITICAL NON-HALLUCINATION RULES (MUST FOLLOW EXACTLY)
+========================
+- ONLY include ANY measurement-related fields if they are EXPLICITLY VISIBLE in the image
+  (numbers, dimension lines, scale bars, or labeled measurements).
+- Measurement-related fields include:
+  measurement_units, width, length, height, area, total_area,
+  mentioned_spaces_area, unassigned_space.
+- DO NOT estimate, infer, guess, or assume measurements.
+- If NO explicit dimensions or scale are visible, OMIT ALL measurement-related fields entirely.
+- If you are unsure whether a measurement is shown, OMIT it.
+
+========================
+CRITICAL COMPLETENESS RULES (MUST FOLLOW EXACTLY)
+========================
+- You MUST identify EVERY distinct enclosed or labeled space visible in the image.
+- This includes ALL of the following when visible:
+  living areas, bedrooms, bathrooms, kitchens, offices, pantries, storage rooms,
+  corridors, stairs, foyers, laundries, garages, terraces, cabanas, and outdoor rooms.
+- DO NOT omit rooms because they are small, repetitive, secondary, or service spaces.
+- If a space has walls, boundaries, or a label, it MUST be listed.
+- If you are unsure what a space is, include it anyway.
+
+========================
+ROOM TYPE RULES (STRICT — NO EXCEPTIONS)
+========================
+Allowed room_type values are EXACTLY:
+- living
+- bedroom
+- bathroom
+- kitchen
+- entry
+- workspace
+- meeting
+- other
+
+Rules:
+- NEVER invent new room_type values.
+- If a room does not clearly match one of the allowed values, you MUST use "other".
+
+========================
+OUTPUT FORMAT (STRICT JSON ONLY)
+========================
+Reply with ONLY a valid JSON object.
+DO NOT include markdown, explanations, or extra text.
+
+The JSON MUST follow this structure exactly:
+
 {
-  "measurement_units": "m" or "ft",
   "layout_type": "apartment" | "villa" | "office" | "unknown",
   "layout_confidence": 0.0 to 1.0,
-  "total_area": "e.g. 250 sq m — total floor/plot area of the layout",
+
+  "measurement_units": "m" | "ft",
+  "total_area": "string",
+  "mentioned_spaces_area": "string",
+  "unassigned_space": "string",
+
   "rooms": [
     {
-      "room": "Room name",
-      "room_type": "living"|"bedroom"|"bathroom"|"kitchen"|"entry"|"workspace"|"meeting"|"other",
-      "width": "value + unit, e.g. 4.2 m",
-      "length": "value + unit, e.g. 3.5 m",
-      "height": "value + unit if known, else omit",
-      "area": "value + unit, e.g. 14.7 sq m (W×L or from plan)",
+      "room": "Room name or label as seen in the image",
+      "room_type": "living" | "bedroom" | "bathroom" | "kitchen" | "entry" | "workspace" | "meeting" | "other",
+      "width": "string",
+      "length": "string",
+      "height": "string",
+      "area": "string",
       "size_confidence": 0.0 to 1.0
     }
   ],
-  "mentioned_spaces_area": "e.g. 180 sq m — sum of all named room areas in same unit",
-  "unassigned_space": "e.g. 70 sq m — walls, corridors, circulation, or short note like 'walls and corridors ~70 sq m'",
-  "entry_points": ["Front door", "..."],
-  "notes": ["Short note 1", "Short note 2"]
+
+  "entry_points": ["string"],
+  "notes": ["string"],
+
+  "room_count_check": {
+    "estimated_visible_rooms": number,
+    "listed_rooms": number,
+    "missing_rooms_possible": boolean,
+    "notes": "string"
+  }
 }
 
-- measurement_units: Use the unit system from the plan (m or ft). All numeric values must use this.
-- total_area: Total built/floor area. Same unit as rooms (e.g. "250 sq m").
-- For each room: width, length, area in that unit. area can be W×L or read from plan.
-- mentioned_spaces_area: Sum of all room areas you listed. Same unit.
-- unassigned_space: Estimate for walls, corridors, thickness; or "unknown" if not inferrable. Same unit when numeric.
-- layout_confidence and size_confidence: 1.0 = very confident, 0.5 = uncertain."""
+========================
+FINAL SELF-CHECK (MANDATORY)
+========================
+Before finalizing your answer:
+- Count how many distinct rooms or spaces are visible in the image.
+- Count how many rooms you listed in the "rooms" array.
+- If the counts do NOT match, revise your answer until they match.
+- Populate "room_count_check" accurately.
+
+IMPORTANT:
+- If measurements are NOT visible, omit ALL measurement-related fields entirely.
+- It is better to include a room with room_type = "other" than to omit it.
+"""
+
 
 # Lazy import to avoid requiring openai when key is not set
 def _openai_client():
@@ -186,7 +266,7 @@ def _analyze_with_ollama_vision(filename: str, content: bytes) -> LayoutAnalysis
             if isinstance(room, dict):
                 normalized_rooms.append({
                     "room": room.get("room", room.get("name", "Unknown")),
-                    "room_type": room.get("room_type", "other"),
+                    "room_type": _normalize_room_type(room.get("room_type")),
                     "width": room.get("width"),
                     "length": room.get("length"),
                     "area": room.get("area"),
@@ -316,7 +396,7 @@ def analyze_layout_with_vision(filename: str, content: bytes) -> LayoutAnalysis 
         for r in rooms_raw:
             if isinstance(r, dict):
                 name = r.get("room") or r.get("name")
-                rtype = r.get("room_type") or r.get("type") or "other"
+                rtype = _normalize_room_type(r.get("room_type") or r.get("type"))
                 if name:
                     room_dict: dict[str, Any] = {"room": str(name), "room_type": str(rtype)}
                     if r.get("estimated_size"):
