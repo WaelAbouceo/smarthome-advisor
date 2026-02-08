@@ -20,8 +20,8 @@ Run these commands in your terminal:
 ```bash
 cd /Users/waelabouella/smarthome-advisor
 
-# Add GitHub remote (replace YOUR_USERNAME with your GitHub username)
-git remote add origin https://github.com/YOUR_USERNAME/smarthome-advisor.git
+# Add GitHub remote (already configured for WaelAbouceo)
+git remote add origin https://github.com/WaelAbouceo/smarthome-advisor.git
 
 # Rename branch to main (GitHub standard)
 git branch -M main
@@ -35,7 +35,7 @@ git push -u origin main
 If you prefer SSH:
 
 ```bash
-git remote add origin git@github.com:YOUR_USERNAME/smarthome-advisor.git
+git remote add origin git@github.com:WaelAbouceo/smarthome-advisor.git
 git branch -M main
 git push -u origin main
 ```
