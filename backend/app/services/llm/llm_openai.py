@@ -97,8 +97,9 @@ def generate_advisor_response(
     has_source_file = bool(layout.get("source_filename"))
     source_filename = layout.get("source_filename", "")
     
-    # Consider layout valid when we have rooms and reasonable confidence (even if layout_type is "unknown")
-    has_layout = len(rooms) > 0 and conf >= 0.5
+    # Consider layout valid when we have rooms (even with low confidence - analysis attempted)
+    # If rooms exist, analysis succeeded - acknowledge what was found
+    has_layout = len(rooms) > 0
     
     # Log layout state for debugging
     logger.debug(
@@ -106,41 +107,22 @@ def generate_advisor_response(
         has_source_file, source_filename, has_layout, len(rooms), conf
     )
     
-    if not has_layout:
-        if has_source_file:
-            # Image was uploaded but analysis failed or is incomplete
-            layout_status = (
-                "CRITICAL: A floor plan image WAS uploaded and we CAN see it. "
-                "The user shared a file with you. NEVER say 'can't see the image', 'can't see the uploaded image', 'I can't see it', or any variation. "
-                "MANDATORY: Your first sentence MUST acknowledge the upload positively (e.g., 'Thanks for sharing your floor plan' or 'I can see you've uploaded your floor plan'). "
-                "Your second sentence MUST ask for room details (e.g., 'Could you tell me about the different rooms and areas?'). "
-                "The context will explicitly say 'A floor plan image WAS uploaded' - trust this and acknowledge it."
-            )
-        else:
-            # No upload at all
-            layout_status = (
-                "We do not have a clear picture of their space (no layout uploaded). "
-                "Do not start the sales discussion yet. If the user is asking about you (e.g. who are you, what do you do), answer that directly; only ask about their space when the conversation is about their home."
-            )
-    elif conf < 0.75:
-        layout_status = "We have a layout but confidence is medium. First establish that we got it right (or ask them to confirm / add a bit more), then move to the sales discussion."
-    else:
-        layout_status = "We have a clear understanding of their space. You can acknowledge it naturally and then have a genuine sales conversation."
-
-    context = (
-        f"Customer first name: {name}. "
-        f"Layout status: {layout_status} "
-    )
+    # Build context: provide facts only, let LLM decide based on context + history + user intent
+    context_parts = [f"Customer: {name}"]
+    
     if has_source_file:
-        context += (
-            f"CRITICAL: A floor plan image WAS uploaded: {layout.get('source_filename', 'floor plan')}. "
-            f"We CAN see it. The user shared this file with you. "
-            f"You MUST acknowledge the upload in your first sentence. NEVER say you can't see it. "
-        )
-    context += (
-        f"Layout type: {layout_type}. Confidence: {conf:.2f}. "
-        f"Rooms we have: {room_list if room_list else 'none'}. Entry points: {entry_points}. "
-    )
+        context_parts.append(f"Floor plan uploaded: {layout.get('source_filename', 'floor plan')}")
+    
+    if has_layout:
+        context_parts.append(f"Layout type: {layout_type}")
+        context_parts.append(f"Confidence: {conf:.2f}")
+        context_parts.append(f"Rooms: {', '.join(room_list) if room_list else 'none'}")
+        if entry_points:
+            context_parts.append(f"Entry points: {entry_points}")
+    elif has_source_file:
+        context_parts.append("No rooms detected from analysis")
+    
+    context = ". ".join(context_parts) + ". "
     units = layout.get("measurement_units")
     total_area = layout.get("total_area")
     mentioned_area = layout.get("mentioned_spaces_area")
@@ -169,7 +151,7 @@ def generate_advisor_response(
             "You are an e& Smart Living advisor. Reply in JSON only: {\"reply\": \"...\", \"action\": \"ask\" or \"offer_plan\"}. "
             "Be conversational; use the context below for layout and recommendations."
         )
-    system_prompt = system_base + "\n\n---\nContext (layout, recommendations, bundle, price — use when replying):\n" + context
+    system_prompt = system_base + "\n\n---\nContext (use this information along with conversation history to understand user intent and respond naturally):\n" + context
 
     # (advisor system prompt loaded from prompts/advisor_system.md)
 

@@ -5,12 +5,18 @@ const Header = () => {
     <header className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-xl border-b border-border/50">
       <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
-          {/* e& Logo */}
-          <div className="flex items-center gap-2">
+          {/* e& Logo & App Name */}
+          <div className="flex items-center gap-3">
             <div className="flex items-center">
               <span className="text-2xl font-bold tracking-tight">
                 <span className="text-primary">e</span>
                 <span className="text-primary">&</span>
+              </span>
+            </div>
+            <div className="h-6 w-px bg-border/50" />
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold tracking-tight text-foreground">
+                Smart Living <span className="text-primary">Advisor</span>
               </span>
             </div>
           </div>
