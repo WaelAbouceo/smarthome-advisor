@@ -73,17 +73,14 @@ const Index = () => {
 
       <main className="container mx-auto px-4 sm:px-6 pb-16 pt-2">
         <div className="max-w-6xl mx-auto">
-          <ResizablePanelGroup direction="horizontal" className="items-start">
-            {/* Chat Panel - Independent height (not constrained by layout panel) */}
+          <ResizablePanelGroup direction="horizontal" className="items-stretch">
+            {/* Chat Panel */}
             <ResizablePanel defaultSize={45} minSize={25} maxSize={75} className="pr-3">
-              <div className="animate-fade-in-up flex flex-col h-auto" style={{ animationDelay: "0.2s" }}>
+              <div className="animate-fade-in-up flex flex-col h-[650px]" style={{ animationDelay: "0.2s" }}>
                 <p className="text-sm text-muted-foreground mb-2">
-                  <Link to="/layout/upload" className="text-primary hover:underline">
-                    Upload & edit floor plan
-                  </Link>
-                  {" "}to get a room-by-room layout, then confirm and get recommendations.
+                  Upload & edit floor plan to get a room-by-room layout, then confirm and get recommendations.
                 </p>
-                <div className="h-[600px] min-h-[500px]">
+                <div className="flex-1 min-h-0">
                   <ChatPanel
                     onPlanGenerated={(res) => setPlan(res)}
                     onLayoutAnalyzed={handleLayoutAnalyzed}
@@ -98,15 +95,15 @@ const Index = () => {
 
             <ResizableHandle withHandle className="mx-2" />
 
-            {/* Layout Panel - Independent height (not constrained by chat panel) */}
+            {/* Layout Panel */}
             <ResizablePanel defaultSize={55} minSize={25} maxSize={75} className="pl-3">
-              <div className="animate-fade-in-up flex flex-col gap-4 h-auto" style={{ animationDelay: "0.3s" }}>
+              <div className="animate-fade-in-up flex flex-col h-[650px]" style={{ animationDelay: "0.3s" }}>
                 <Tabs 
                   value={activeTab} 
                   onValueChange={(v) => setActiveTab(v as "layout" | "plan")} 
-                  className="w-full"
+                  className="w-full flex-1 min-h-0 flex flex-col"
                 >
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className="grid w-full grid-cols-2 flex-shrink-0 mb-2">
                     <TabsTrigger value="layout" disabled={!layout}>
                       Your layout
                     </TabsTrigger>
@@ -114,7 +111,7 @@ const Index = () => {
                       Your plan
                     </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="layout" className="mt-4">
+                  <TabsContent value="layout" className="flex-1 overflow-auto">
                     {layout ? (
                       <LayoutSummary
                         layout={layout}
@@ -122,18 +119,16 @@ const Index = () => {
                         onLayoutChange={handleLayoutChange}
                       />
                     ) : (
-                      <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
                         <p>Upload a floor plan to see your layout here.</p>
                       </div>
                     )}
                   </TabsContent>
-                  <TabsContent value="plan" className="mt-4">
+                  <TabsContent value="plan" className="flex-1 overflow-auto">
                     {plan ? (
-                      <div className={layout ? "flex-1 min-h-[360px]" : "flex-1"}>
-                        <SmartHomePlan isVisible={!!plan} plan={plan} />
-                      </div>
+                      <SmartHomePlan isVisible={!!plan} plan={plan} />
                     ) : (
-                      <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
                         <p>Get recommendations from the chat to see your smart home plan here.</p>
                       </div>
                     )}

@@ -3,7 +3,7 @@ import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LayoutUpload from "./LayoutUpload";
 import * as api from "@/lib/api";
-import { DEMO_CUSTOMER_ID, STREAMING_ID, ANALYZING_ID } from "@/utils/constants";
+// Constants are defined locally below
 import { parseDimensionUpdates } from "@/utils/roomParsing";
 
 interface Message {
@@ -51,7 +51,11 @@ function MessageContent({ content, streaming }: { content: string; streaming?: b
         )
       )}
       {streaming && (
-        <span className="inline-block w-2 h-4 ml-0.5 bg-primary animate-pulse align-middle" aria-hidden />
+        <span className="inline-flex gap-1 ml-1.5 align-middle" aria-hidden>
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+        </span>
       )}
     </p>
   );
@@ -169,10 +173,16 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
     }
   }, [currentLayout?.layout_id, layoutId]);
 
+  // Only scroll to bottom when user sends a message, not on every render or LLM response
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const userSentMessageRef = useRef(false);
 
   useEffect(() => {
-    scrollToBottom();
+    // Only auto-scroll when user sends a message, not on initial load or LLM streaming
+    if (userSentMessageRef.current) {
+      scrollToBottom();
+      userSentMessageRef.current = false;
+    }
   }, [messages]);
 
   const toChatMessages = (msgs: Message[]): api.ChatMessage[] =>
@@ -209,7 +219,7 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
           if (onLayoutFromChat && final.layout && typeof final.layout === "object" && (final.layout as { layout_id?: string }).layout_id) {
             // LLM has processed the message and may have updated the layout
             // Use LLM's updated layout (it's authoritative and handles all natural language)
-            onLayoutFromChat(final.layout as api.LayoutAnalysis);
+            onLayoutFromChat(final.layout as unknown as api.LayoutAnalysis);
             // Clear parser fallback since LLM update is authoritative
             lastLocalUpdateRef.current = null;
           }
@@ -236,7 +246,7 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
         if (onLayoutFromChat && res.layout && typeof res.layout === "object" && (res.layout as { layout_id?: string }).layout_id) {
           // LLM has processed the message and may have updated the layout
           // Use LLM's updated layout (it's authoritative and handles all natural language)
-          onLayoutFromChat(res.layout as api.LayoutAnalysis);
+          onLayoutFromChat(res.layout as unknown as api.LayoutAnalysis);
           // Clear parser fallback since LLM update is authoritative
           lastLocalUpdateRef.current = null;
         }
@@ -261,7 +271,7 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
     setLoading(true);
     setMessages((prev) => [
       ...prev,
-      { id: ANALYZING_ID, type: "assistant", content: "I'm analyzing your floor plan now — one moment." },
+      { id: ANALYZING_ID, type: "assistant", content: "Analyzing your floor plan — reading room names and dimensions exactly as labeled..." },
     ]);
     try {
       const analysis = await api.analyzeLayout(file);
@@ -328,11 +338,16 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
         }
       } else if (currentLayout) {
         // No parser updates, but ensure cache has latest layout from panel edits
-        // This ensures panel → chat sync is preserved
-        api.upsertLayoutCache(currentLayout as unknown as Record<string, unknown>).catch(() => {});
+        // This ensures panel → chat sync is preserved (must await before sending chat)
+        try {
+          await api.upsertLayoutCache(currentLayout as unknown as Record<string, unknown>);
+        } catch {
+          // Cache update failed, but continue with message send
+        }
       }
     }
 
+    userSentMessageRef.current = true; // Mark that user sent a message to trigger scroll
     setMessages((prev) => [
       ...prev,
       { id: Date.now().toString(), type: "user", content: userMessage },
@@ -391,7 +406,7 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
             className={`animate-fade-in ${message.type === "assistant" ? "" : "flex justify-end"}`}
           >
             <div
-              className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 shadow-sm ${
+              className={`max-w-[88%] w-fit rounded-2xl px-3.5 py-2.5 shadow-sm ${
                 message.type === "assistant"
                   ? "bg-secondary/80 text-foreground border border-border/50"
                   : "bg-primary text-primary-foreground shadow-button/30"
@@ -404,7 +419,7 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
         <div ref={messagesEndRef} />
       </div>
 
-      {!hasUploadedLayout && <LayoutUpload onUpload={handleUpload} disabled={loading} />}
+      {!hasUploadedLayout && <LayoutUpload onUpload={handleUpload} disabled={loading} loading={loading} />}
 
       <div className="relative">
         <input

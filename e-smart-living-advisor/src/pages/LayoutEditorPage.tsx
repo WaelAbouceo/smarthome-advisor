@@ -262,8 +262,8 @@ export default function LayoutEditorPage() {
                         </div>
                       </TableCell>
                       <TableCell className="p-1 text-sm">
-                        {area != null && !Number.isNaN(area)
-                          ? `${area % 1 === 0 ? area : area.toFixed(1)} ${units}²`
+                        {area != null && !Number.isNaN(Number(area))
+                          ? `${Number(area) % 1 === 0 ? area : Number(area).toFixed(1)} ${units}²`
                           : "—"}
                       </TableCell>
                       <TableCell className="p-1">
