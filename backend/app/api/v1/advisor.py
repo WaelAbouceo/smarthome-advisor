@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import json
+import os
 from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
+from app.core.config import settings  # noqa: F401 — ensures .env is loaded before reading LLM_PROVIDER
 from app.core.logging import get_logger
 from app.models.advisor import AdvisorChatRequest, AdvisorChatResponse
 from app.repositories.crm_repo import CRMRepository
 from app.repositories.product_repo import ProductRepository
 from app.services.persona.persona_builder import build_persona
 from app.services.recommendation.recommender import recommend
-from app.services.llm.llm_openai import generate_advisor_response
 from app.services.llm.llm_stub import stream_text
+
+# LLM Model Selection - Set LLM_PROVIDER env var to "ollama" or "openai"
+_LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openai").lower()
+if _LLM_PROVIDER == "ollama":
+    from app.services.llm.llm_ollama import generate_advisor_response
+else:
+    from app.services.llm.llm_openai import generate_advisor_response
 
 router = APIRouter()
 logger = get_logger("api.advisor")
@@ -104,7 +112,7 @@ def advisor_chat(req: AdvisorChatRequest):
     if result is None:
         raise HTTPException(
             status_code=503,
-            detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+            detail=f"Advisor is temporarily unavailable. Please check {'OLLAMA_BASE_URL and Ollama server connectivity' if _LLM_PROVIDER == 'ollama' else 'OPENAI_API_KEY is configured'}.",
         )
     reply, action, layout_updates = result
 
@@ -228,7 +236,7 @@ def advisor_chat_stream(req: AdvisorChatRequest):
     if result is None:
         raise HTTPException(
             status_code=503,
-            detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+            detail=f"Advisor is temporarily unavailable. Please check {'OLLAMA_BASE_URL and Ollama server connectivity' if _LLM_PROVIDER == 'ollama' else 'OPENAI_API_KEY is configured'}.",
         )
     reply, action, layout_updates = result
 

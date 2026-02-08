@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(set:*)",
+      "Bash(tasklist:*)",
+      "Bash(del:*)",
+      "Bash(git -C \"c:/Users/Administrator/Downloads/smarthome-advisor\" status)",
+      "Bash(git -C \"c:/Users/Administrator/Downloads/smarthome-advisor\" diff backend/app/api/v1/advisor.py backend/app/services/layout/layout_vision.py e-smart-living-advisor/src/components/ChatPanel.tsx)"
+    ]
+  }
+}

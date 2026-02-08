@@ -89,6 +89,139 @@ def _image_bytes_to_base64_url(content: bytes, media_type: str = "image/png") ->
     return f"data:{media_type};base64,{b64}"
 
 
+def _analyze_with_ollama_vision(filename: str, content: bytes) -> LayoutAnalysis | None:
+    """
+    Use Ollama with vision-capable model (Llama 4 Scout) to analyze floor plan.
+    """
+    try:
+        import os
+        import requests
+        
+        # Get Ollama config from environment
+        base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        token = os.environ.get("OLLAMA_TOKEN")
+        
+        if not base_url:
+            logger.debug("Ollama vision skipped: OLLAMA_BASE_URL not set")
+            return None
+        
+        # Convert image to base64
+        if filename.lower().endswith(".pdf") or content[:4] == b"%PDF":
+            logger.debug("converting PDF to image for Ollama vision filename=%s", filename)
+            image_bytes = _pdf_to_image_bytes(content)
+            if not image_bytes:
+                logger.warning("PDF to image failed, cannot use Ollama vision filename=%s", filename)
+                return None
+        else:
+            image_bytes = content
+        
+        if not image_bytes or len(image_bytes) > 20 * 1024 * 1024:  # 20 MB limit
+            logger.debug("Ollama vision skipped: empty or too large size=%d", len(image_bytes) if image_bytes else 0)
+            return None
+        
+        image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+        
+        logger.info("calling Ollama vision model filename=%s image_size=%d", filename, len(image_bytes))
+        
+        prompt = get_prompt("layout_vision") or _LAYOUT_VISION_PROMPT_FALLBACK
+        
+        # Call Ollama API with vision using session-cookie auth for Cloudflare tunnel
+        session = requests.Session()
+        if token:
+            r = session.get(
+                f"{base_url.rstrip('/')}/",
+                params={"token": token},
+                timeout=60,
+            )
+            r.raise_for_status()
+
+        payload = {
+            "model": "llama4:scout",
+            "prompt": prompt,
+            "images": [image_b64],
+            "stream": False,
+            "format": "json",
+            "options": {
+                "num_predict": 4096,  # enough tokens for 15+ rooms in JSON
+            },
+        }
+
+        response = session.post(
+            f"{base_url.rstrip('/')}/api/generate",
+            json=payload,
+            timeout=600,  # 10 minutes
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        raw_response = data.get("response", "").strip()
+
+        if not raw_response:
+            logger.warning("Ollama vision returned empty response")
+            return None
+
+        logger.info("Ollama vision raw response (%d chars): %s", len(raw_response), raw_response[:300])
+        
+        # Parse JSON response
+        try:
+            start = raw_response.find("{")
+            end = raw_response.rfind("}") + 1
+            if start >= 0 and end > start:
+                json_str = raw_response[start:end]
+                layout_data = json.loads(json_str)
+            else:
+                logger.warning("No JSON found in Ollama vision response")
+                return None
+        except json.JSONDecodeError as e:
+            logger.warning("Failed to parse Ollama vision JSON: %s", e)
+            return None
+        
+        # Convert to LayoutAnalysis
+        layout_id = f"layout_{_sha1_bytes(content)[:10]}"
+        rooms = layout_data.get("rooms", [])
+        
+        # Normalize room data
+        normalized_rooms = []
+        for room in rooms:
+            if isinstance(room, dict):
+                normalized_rooms.append({
+                    "room": room.get("room", room.get("name", "Unknown")),
+                    "room_type": room.get("room_type", "other"),
+                    "width": room.get("width"),
+                    "length": room.get("length"),
+                    "area": room.get("area"),
+                    "size_confidence": room.get("size_confidence", 0.8),
+                })
+        
+        # Build kwargs, including optional area fields from the vision model
+        layout_kwargs: dict[str, Any] = dict(
+            layout_id=layout_id,
+            layout_type=layout_data.get("layout_type", "unknown"),
+            rooms=normalized_rooms,
+            entry_points=layout_data.get("entry_points", []),
+            notes=layout_data.get("notes", []),
+            confidence=float(layout_data.get("layout_confidence", 0.8)),
+            source_filename=filename,
+        )
+        for optional_field in ("measurement_units", "total_area", "mentioned_spaces_area", "unassigned_space"):
+            if layout_data.get(optional_field):
+                layout_kwargs[optional_field] = layout_data[optional_field]
+
+        result = LayoutAnalysis(**layout_kwargs)
+        
+        logger.info("Ollama vision analysis complete layout_id=%s rooms=%d confidence=%.2f", 
+                   layout_id, len(normalized_rooms), result.confidence)
+        
+        return result
+        
+    except requests.exceptions.RequestException as e:
+        logger.warning("Ollama vision API error: %s", e)
+        return None
+    except Exception as e:
+        logger.warning("Ollama vision analysis failed: %s", e, exc_info=True)
+        return None
+
+
 def _infer_media_type(filename: str, content: bytes) -> str:
     fname = (filename or "").lower()
     if fname.endswith(".png") or content[:8] == b"\x89PNG\r\n\x1a\n":
@@ -104,12 +237,25 @@ def _infer_media_type(filename: str, content: bytes) -> str:
 
 def analyze_layout_with_vision(filename: str, content: bytes) -> LayoutAnalysis | None:
     """
-    Use vision LLM (GPT-4o) to analyze the floor plan image.
+    Use vision LLM to analyze the floor plan image.
+    Tries Ollama (Llama 4 Scout with vision) first, falls back to OpenAI GPT-4o if available.
     """
-    # Vision LLM
+    # Try Ollama with vision first
+    import os
+    llm_provider = os.environ.get("LLM_PROVIDER", "openai").lower()
+    
+    logger.info("analyze_layout_with_vision provider=%s filename=%s size=%d", llm_provider, filename, len(content))
+
+    if llm_provider == "ollama":
+        result = _analyze_with_ollama_vision(filename, content)
+        if result is not None:
+            return result
+        logger.warning("Ollama vision failed for %s, falling back to OpenAI if available", filename)
+
+    # Fallback to OpenAI GPT-4o
     client = _openai_client()
     if not client:
-        logger.debug("vision skipped: no OpenAI API key")
+        logger.warning("vision skipped: no OpenAI API key and Ollama not available (provider=%s)", llm_provider)
         return None
 
     # Normalize to image bytes
