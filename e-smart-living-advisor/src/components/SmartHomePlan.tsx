@@ -112,7 +112,7 @@ const SmartHomePlan = ({ isVisible, plan }: SmartHomePlanProps) => {
   ];
 
   return (
-    <div className="card-premium p-6 h-full animate-fade-in">
+    <div className="card-premium p-6 h-full animate-fade-in overflow-auto">
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-2 h-2 rounded-full bg-primary" />

@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Home, Upload, X } from "lucide-react";
+import { Home, Upload, X, Loader2 } from "lucide-react";
 
 interface LayoutUploadProps {
   onUpload: (file: File) => void;
   disabled?: boolean;
+  /** Show loading indicator while processing */
+  loading?: boolean;
 }
 
-const LayoutUpload = ({ onUpload, disabled }: LayoutUploadProps) => {
+const LayoutUpload = ({ onUpload, disabled, loading }: LayoutUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -61,14 +63,25 @@ const LayoutUpload = ({ onUpload, disabled }: LayoutUploadProps) => {
       <div className="bg-secondary/50 rounded-xl p-4 mb-4">
         <div className="flex items-center gap-3">
           {preview ? (
-            <img 
-              src={preview} 
-              alt="Layout preview" 
-              className="w-16 h-16 rounded-lg object-cover"
-            />
+            <div className="relative w-16 h-16 flex-shrink-0">
+              <img 
+                src={preview} 
+                alt="Layout preview" 
+                className={`w-16 h-16 rounded-lg object-cover ${loading ? 'opacity-50' : ''}`}
+              />
+              {loading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                </div>
+              )}
+            </div>
           ) : (
-            <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
-              <Home className="w-6 h-6 text-muted-foreground" />
+            <div className="relative w-16 h-16 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+              {loading ? (
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              ) : (
+                <Home className="w-6 h-6 text-muted-foreground" />
+              )}
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -76,15 +89,17 @@ const LayoutUpload = ({ onUpload, disabled }: LayoutUploadProps) => {
               {uploadedFile.name}
             </p>
             <p className="text-xs text-muted-foreground">
-              {(uploadedFile.size / 1024).toFixed(1)} KB
+              {loading ? 'Analyzing...' : `${(uploadedFile.size / 1024).toFixed(1)} KB`}
             </p>
           </div>
-          <button 
-            onClick={removeFile}
-            className="p-1.5 rounded-full hover:bg-muted transition-colors"
-          >
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
+          {!loading && (
+            <button 
+              onClick={removeFile}
+              className="p-1.5 rounded-full hover:bg-muted transition-colors"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
         </div>
       </div>
     );
