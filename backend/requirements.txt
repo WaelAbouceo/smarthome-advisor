@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-multipart==0.0.20
+sse-starlette==2.1.3
+orjson==3.10.12
+openai>=1.0.0
+pymupdf>=1.24.0
+python-dotenv>=1.0.0
+# Deterministic layout pipeline (render → preprocess → OCR → walls → rooms → scale → grounding)
+# Pin numpy<2 to avoid binary incompatibility with opencv/pyarrow built for NumPy 1.x
+numpy>=1.24.0,<2
+opencv-python-headless>=4.8.0
+pytesseract>=0.3.10

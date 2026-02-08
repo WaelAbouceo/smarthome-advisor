@@ -1,0 +1,48 @@
+{
+  "CUST_1001": {
+    "customer_id": "CUST_1001",
+    "name": "Wael",
+    "segment": "Premium",
+    "city": "Cairo",
+    "services": {
+      "internet_plan": "eLife Ultra",
+      "internet_speed_mbps": 500,
+      "tv_plan": "evision Max",
+      "voice_line": true
+    },
+    "household": {
+      "adults": 2,
+      "kids": 2,
+      "pets": 0
+    },
+    "usage": {
+      "streaming_heavy": true,
+      "work_from_home": true,
+      "gaming": false,
+      "security_sensitive": true
+    }
+  },
+  "CUST_2002": {
+    "customer_id": "CUST_2002",
+    "name": "Maha",
+    "segment": "Mid",
+    "city": "Dubai",
+    "services": {
+      "internet_plan": "eLife Starter",
+      "internet_speed_mbps": 250,
+      "tv_plan": "evision Basic",
+      "voice_line": false
+    },
+    "household": {
+      "adults": 1,
+      "kids": 0,
+      "pets": 1
+    },
+    "usage": {
+      "streaming_heavy": true,
+      "work_from_home": false,
+      "gaming": true,
+      "security_sensitive": false
+    }
+  }
+}

@@ -1,0 +1,13 @@
+Smart Living Advisor - Demo v0
+Locked: February 7, 2026
+
+This version includes:
+- Floor plan upload and vision analysis
+- Interactive layout editor with bidirectional sync
+- LLM-powered conversational advisor
+- Natural language layout updates
+- Product recommendations and bundles
+- Resizable UI panels
+- Streaming chat responses
+
+See DEMO_V0.md for full details.
