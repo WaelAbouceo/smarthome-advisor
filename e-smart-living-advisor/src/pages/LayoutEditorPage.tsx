@@ -262,9 +262,12 @@ export default function LayoutEditorPage() {
                         </div>
                       </TableCell>
                       <TableCell className="p-1 text-sm">
-                        {area != null && !Number.isNaN(area)
-                          ? `${area % 1 === 0 ? area : area.toFixed(1)} ${units}²`
-                          : "—"}
+                        {(() => {
+                          const numArea = typeof area === "string" ? parseFloat(area) : area;
+                          return numArea != null && !Number.isNaN(numArea)
+                            ? `${numArea % 1 === 0 ? numArea : numArea.toFixed(1)} ${units}²`
+                            : "—";
+                        })()}
                       </TableCell>
                       <TableCell className="p-1">
                         <span

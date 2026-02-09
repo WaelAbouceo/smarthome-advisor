@@ -94,10 +94,12 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow-anchor: none;
   }
 
   html {
     scroll-behavior: smooth;
+    overflow-anchor: none;
   }
 }
 

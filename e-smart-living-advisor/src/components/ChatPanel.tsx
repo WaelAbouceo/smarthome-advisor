@@ -191,7 +191,8 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
   const [uploading, setUploading] = useState(false); // Separate state for upload loading
   const [preparingPlan, setPreparingPlan] = useState(false); // State for plan preparation
   const [error, setError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   // Track the most recent locally updated layout to prevent backend from overwriting user changes
   const lastLocalUpdateRef = useRef<api.LayoutAnalysis | null>(null);
 
@@ -206,10 +207,22 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
     }
   }, [currentLayout?.layout_id, layoutId]);
 
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const updateAutoScrollFlag = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 64;
+  };
 
   useEffect(() => {
-    scrollToBottom();
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    if (!shouldAutoScrollRef.current) return;
+
+    requestAnimationFrame(() => {
+      // Scroll ONLY within the chat container (prevents window/page scroll jumps)
+      el.scrollTop = el.scrollHeight;
+    });
   }, [messages]);
 
   const toChatMessages = (msgs: Message[]): api.ChatMessage[] =>
@@ -273,7 +286,7 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
           if (onLayoutFromChat && final.layout && typeof final.layout === "object" && (final.layout as { layout_id?: string }).layout_id) {
             // LLM has processed the message and may have updated the layout
             // Use LLM's updated layout (it's authoritative and handles all natural language)
-            onLayoutFromChat(final.layout as api.LayoutAnalysis);
+            onLayoutFromChat(final.layout as unknown as api.LayoutAnalysis);
             // Clear parser fallback since LLM update is authoritative
             lastLocalUpdateRef.current = null;
           }
@@ -321,7 +334,7 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
         if (onLayoutFromChat && res.layout && typeof res.layout === "object" && (res.layout as { layout_id?: string }).layout_id) {
           // LLM has processed the message and may have updated the layout
           // Use LLM's updated layout (it's authoritative and handles all natural language)
-          onLayoutFromChat(res.layout as api.LayoutAnalysis);
+          onLayoutFromChat(res.layout as unknown as api.LayoutAnalysis);
           // Clear parser fallback since LLM update is authoritative
           lastLocalUpdateRef.current = null;
         }
@@ -564,7 +577,11 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
         </div>
       )}
 
-      <div className={`flex-1 overflow-y-auto space-y-4 mb-3 pr-1 scroll-smooth ${uploading || preparingPlan ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div
+        ref={messagesContainerRef}
+        onScroll={updateAutoScrollFlag}
+        className={`flex-1 overflow-y-auto space-y-4 mb-3 pr-1 scroll-smooth ${uploading || preparingPlan ? "opacity-50 pointer-events-none" : ""}`}
+      >
         {messages.map((message) => (
           <div
             key={message.id}
@@ -581,7 +598,6 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
             </div>
           </div>
         ))}
-        <div ref={messagesEndRef} />
       </div>
 
       {!hasUploadedLayout && <LayoutUpload onUpload={handleUpload} disabled={loading || uploading || preparingPlan} />}

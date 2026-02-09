@@ -285,13 +285,16 @@ def advisor_chat(req: AdvisorChatRequest):
                     room_name = (llm_room.get("name") or llm_room.get("room", "")).lower()
                     
                     if room_id and room_id in existing_by_id:
-                        # Update existing room by ID
-                        merged_rooms.append({**existing_by_id[room_id], **llm_room})
+                        # Update existing room by ID, but preserve user edits to name/room_type
+                        existing = existing_by_id[room_id]
+                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
+                        merged_rooms.append(merged)
                         processed_ids.add(room_id)
                     elif room_name and room_name in existing_by_name:
-                        # Update existing room by name
+                        # Update existing room by name, but preserve user edits to name/room_type
                         existing = existing_by_name[room_name]
-                        merged_rooms.append({**existing, **llm_room})
+                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
+                        merged_rooms.append(merged)
                         if existing.get("room_id"):
                             processed_ids.add(existing["room_id"])
                     else:
@@ -307,7 +310,7 @@ def advisor_chat(req: AdvisorChatRequest):
                 updated_layout["rooms"] = merged_rooms
             
             logger.info(
-                "advisor/chat merged rooms: existing=%d llm_returned=%d final=%d",
+                "advisor/chat merged rooms: existing=%d llm_returned=%d final=%d (user edits preserved)",
                 len(existing_rooms), len(llm_rooms), len(updated_layout["rooms"])
             )
         
@@ -512,13 +515,16 @@ def advisor_chat_stream(req: AdvisorChatRequest):
                     room_name = (llm_room.get("name") or llm_room.get("room", "")).lower()
                     
                     if room_id and room_id in existing_by_id:
-                        # Update existing room by ID
-                        merged_rooms.append({**existing_by_id[room_id], **llm_room})
+                        # Update existing room by ID, but preserve user edits to name/room_type
+                        existing = existing_by_id[room_id]
+                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
+                        merged_rooms.append(merged)
                         processed_ids.add(room_id)
                     elif room_name and room_name in existing_by_name:
-                        # Update existing room by name
+                        # Update existing room by name, but preserve user edits to name/room_type
                         existing = existing_by_name[room_name]
-                        merged_rooms.append({**existing, **llm_room})
+                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
+                        merged_rooms.append(merged)
                         if existing.get("room_id"):
                             processed_ids.add(existing["room_id"])
                     else:
@@ -534,7 +540,7 @@ def advisor_chat_stream(req: AdvisorChatRequest):
                 updated_layout["rooms"] = merged_rooms
             
             logger.info(
-                "advisor/chat/stream merged rooms: existing=%d llm_returned=%d final=%d",
+                "advisor/chat/stream merged rooms: existing=%d llm_returned=%d final=%d (user edits preserved)",
                 len(existing_rooms), len(llm_rooms), len(updated_layout["rooms"])
             )
         
