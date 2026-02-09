@@ -1,6 +1,6 @@
 # System Architecture
 
-High-level system design and data flow for Smart Living Advisor - Demo v0.
+High-level system design and data flow for Smart Living AI buddy - Demo v0.
 
 ## Overview
 

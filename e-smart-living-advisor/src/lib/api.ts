@@ -290,3 +290,58 @@ export async function getProductCatalog(): Promise<ProductCatalog> {
   if (!r.ok) throw new Error(`Products catalog failed: ${r.status}`);
   return r.json();
 }
+
+// Admin API functions
+export interface AdminUsersResponse {
+  total: number;
+  users: Array<Record<string, unknown>>;
+}
+
+export interface AdminPromptsResponse {
+  prompts_dir: string;
+  total: number;
+  prompts: Record<string, string>;
+}
+
+export interface AdminBusinessRulesResponse {
+  rule_based_recommender: {
+    file: string;
+    code: string;
+    description: string;
+  };
+  rag_retriever: {
+    file: string;
+    code: string;
+    description: string;
+  };
+  knowledge_base: Record<string, unknown>;
+  llm_recommender: {
+    file: string;
+    description: string;
+    note: string;
+  };
+}
+
+export async function getAdminUsers(): Promise<AdminUsersResponse> {
+  const r = await apiFetch("/api/v1/admin/users");
+  if (!r.ok) throw new Error(`Admin users failed: ${r.status}`);
+  return r.json();
+}
+
+export async function getAdminProducts(): Promise<ProductCatalog> {
+  const r = await apiFetch("/api/v1/admin/products");
+  if (!r.ok) throw new Error(`Admin products failed: ${r.status}`);
+  return r.json();
+}
+
+export async function getAdminPrompts(): Promise<AdminPromptsResponse> {
+  const r = await apiFetch("/api/v1/admin/prompts");
+  if (!r.ok) throw new Error(`Admin prompts failed: ${r.status}`);
+  return r.json();
+}
+
+export async function getAdminBusinessRules(): Promise<AdminBusinessRulesResponse> {
+  const r = await apiFetch("/api/v1/admin/business-rules");
+  if (!r.ok) throw new Error(`Admin business rules failed: ${r.status}`);
+  return r.json();
+}

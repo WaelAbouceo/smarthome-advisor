@@ -1,7 +1,7 @@
 #!/bin/bash
-# Push Smart Living Advisor to GitHub
+# Push Smart Living AI buddy to GitHub
 
-echo "🚀 Pushing Smart Living Advisor to GitHub..."
+echo "🚀 Pushing Smart Living AI buddy to GitHub..."
 echo ""
 
 # Check if remote exists

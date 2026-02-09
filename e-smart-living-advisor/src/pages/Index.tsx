@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import ChatPanel from "@/components/ChatPanel";
@@ -21,6 +21,7 @@ const Index = () => {
   const [layout, setLayout] = useState<LayoutAnalysis | null>(null);
   const [layoutImageUrl, setLayoutImageUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"layout" | "plan">("layout");
+  const [hasShownPlan, setHasShownPlan] = useState(false); // Track if we've shown plan before
 
   useEffect(() => {
     if (state?.layout) setLayout(state.layout);
@@ -33,12 +34,14 @@ const Index = () => {
     }
   }, [layout?.layout_id]); // Only trigger when layout_id changes (new upload)
 
-  // Auto-switch to plan tab when plan is generated
+  // Auto-switch to plan tab when plan is first generated
+  // After that, plan updates but tab stays where user left it
   useEffect(() => {
-    if (plan) {
+    if (plan && plan.recommended_products && plan.recommended_products.length > 0 && !hasShownPlan) {
       setActiveTab("plan");
+      setHasShownPlan(true);
     }
-  }, [plan?.recommended_products?.length]); // Only trigger when plan content changes
+  }, [plan?.recommended_products?.length, hasShownPlan]); // Only trigger when plan content changes
 
   const handleLayoutAnalyzed = useCallback((analysis: LayoutAnalysis, imageUrl?: string) => {
     setLayoutImageUrl((prev) => {
@@ -51,14 +54,23 @@ const Index = () => {
   // BIDIRECTIONAL SYNC: Single source of truth handler
   // Called from both ChatPanel (chat → panel) and LayoutSummary (panel → chat)
   // Updates state and backend cache to keep everything in sync
-  const handleLayoutChange = useCallback(async (updated: LayoutAnalysis) => {
+  const handleLayoutChange = useCallback(async (updated: LayoutAnalysis | null) => {
+    if (updated === null) {
+      // Clear layout and image
+      setLayout(null);
+      if (layoutImageUrl) {
+        URL.revokeObjectURL(layoutImageUrl);
+        setLayoutImageUrl(null);
+      }
+      return;
+    }
     // Update state → triggers re-render of both ChatPanel and LayoutSummary
     setLayout(updated);
     // Update backend cache so advisor uses latest layout
     api.upsertLayoutCache(updated as unknown as Record<string, unknown>).catch(() => {
       // Cache update best-effort
     });
-  }, []);
+  }, [layoutImageUrl]);
 
   useEffect(() => {
     return () => {
@@ -77,18 +89,37 @@ const Index = () => {
             {/* Chat Panel - Independent height (not constrained by layout panel) */}
             <ResizablePanel defaultSize={45} minSize={25} maxSize={75} className="pr-3">
               <div className="animate-fade-in-up flex flex-col h-auto" style={{ animationDelay: "0.2s" }}>
-                <p className="text-sm text-muted-foreground mb-2">
-                  <Link to="/layout/upload" className="text-primary hover:underline">
-                    Upload & edit floor plan
-                  </Link>
-                  {" "}to get a room-by-room layout, then confirm and get recommendations.
-                </p>
                 <div className="h-[600px] min-h-[500px]">
                   <ChatPanel
-                    onPlanGenerated={(res) => setPlan(res)}
+                    onPlanGenerated={(res) => {
+                      if (res === null) {
+                        // Clear plan
+                        setPlan(null);
+                        setHasShownPlan(false);
+                        return;
+                      }
+                      // Always update plan - create new object reference to ensure React detects change
+                      console.log("Index: Plan updated", {
+                        productCount: res.recommended_products?.length || 0,
+                        action: res.action,
+                        hasProducts: !!(res.recommended_products && res.recommended_products.length > 0),
+                      });
+                      setPlan({ ...res }); // Spread to create new object reference
+                    }}
                     onLayoutAnalyzed={handleLayoutAnalyzed}
                     initialLayoutId={state?.layoutId ?? undefined}
-                    onLayoutFromChat={(layout) => setLayout(layout)}
+                    onLayoutFromChat={(layout) => {
+                      if (layout === null) {
+                        // Clear layout and image
+                        setLayout(null);
+                        if (layoutImageUrl) {
+                          URL.revokeObjectURL(layoutImageUrl);
+                          setLayoutImageUrl(null);
+                        }
+                        return;
+                      }
+                      setLayout(layout);
+                    }}
                     currentLayout={layout}
                     onLayoutUpdate={handleLayoutChange}
                   />
@@ -130,7 +161,12 @@ const Index = () => {
                   <TabsContent value="plan" className="mt-4">
                     {plan ? (
                       <div className={layout ? "flex-1 min-h-[360px]" : "flex-1"}>
-                        <SmartHomePlan isVisible={!!plan} plan={plan} />
+                        {/* Use plan's answer + timestamp as key to force re-render when plan updates */}
+                        <SmartHomePlan 
+                          key={`${plan.answer}-${(plan as any)._updatedAt || Date.now()}-${plan.recommended_products?.length || 0}`} 
+                          isVisible={!!plan} 
+                          plan={plan} 
+                        />
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-[400px] text-muted-foreground">

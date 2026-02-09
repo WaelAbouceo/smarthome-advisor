@@ -60,9 +60,122 @@ const SmartHomePlan = ({ isVisible, plan }: SmartHomePlanProps) => {
       {} as Record<string, { name: string; price: number }>,
     ) ?? {};
   const bundleList = catalog?.bundles ?? [];
-  const bundle = plan?.recommended_bundle_id
-    ? bundleList.find((b) => b.bundle_id === plan.recommended_bundle_id)
-    : null;
+  
+  // Recalculate best matching bundle based on current recommendations
+  // This ensures bundle updates even if backend returns same bundle_id
+  const calculateBestBundle = () => {
+    if (!plan?.recommended_products || plan.recommended_products.length === 0) {
+      return null;
+    }
+    
+    const recommendedProductIds = new Set(
+      plan.recommended_products.map((r) => r.product_id)
+    );
+    
+    // Find bundle with best match score
+    let bestBundle = null;
+    let bestScore = -1;
+    
+    for (const b of bundleList) {
+      const bundleItems = new Set(b.items || []);
+      const matchCount = [...recommendedProductIds].filter((pid) =>
+        bundleItems.has(pid)
+      ).length;
+      
+      if (matchCount > bestScore && matchCount > 0) {
+        bestScore = matchCount;
+        bestBundle = b;
+      }
+    }
+    
+    // If backend provided a bundle_id, prefer it if it still matches
+    if (plan.recommended_bundle_id) {
+      const backendBundle = bundleList.find(
+        (b) => b.bundle_id === plan.recommended_bundle_id
+      );
+      if (backendBundle) {
+        const backendItems = new Set(backendBundle.items || []);
+        const backendMatchCount = [...recommendedProductIds].filter((pid) =>
+          backendItems.has(pid)
+        ).length;
+        // Use backend bundle if it matches at least as well as our calculated best
+        if (backendMatchCount >= bestScore) {
+          return backendBundle;
+        }
+      }
+    }
+    
+    return bestBundle;
+  };
+  
+  const bundle = calculateBestBundle();
+  
+  // Calculate monthly price: bundle price + products NOT in bundle
+  const calculateMonthlyPrice = () => {
+    if (!plan?.recommended_products || plan.recommended_products.length === 0) {
+      return plan?.estimated_monthly ?? 0;
+    }
+    
+    // Get unique recommended product IDs
+    const recommendedProductIds = new Set(
+      plan.recommended_products.map((r) => r.product_id)
+    );
+    
+    let total = 0;
+    
+    // If we have a matching bundle, use bundle price for products in bundle
+    if (bundle?.bundle_monthly && bundle.items) {
+      const bundleItems = new Set(bundle.items);
+      const productsInBundle = [...recommendedProductIds].filter((pid) =>
+        bundleItems.has(pid)
+      );
+      
+      // Add bundle price
+      total += bundle.bundle_monthly;
+      
+      // Add prices for products NOT in bundle
+      const productsNotInBundle = [...recommendedProductIds].filter(
+        (pid) => !bundleItems.has(pid)
+      );
+      
+      for (const productId of productsNotInBundle) {
+        total += productMap[productId]?.price ?? 0;
+      }
+    } else {
+      // No bundle match: sum all individual product prices
+      const seenProducts = new Set<string>();
+      total = plan.recommended_products.reduce((sum, r) => {
+        if (!seenProducts.has(r.product_id)) {
+          seenProducts.add(r.product_id);
+          return sum + (productMap[r.product_id]?.price ?? 0);
+        }
+        return sum;
+      }, 0);
+    }
+    
+    // Use backend estimated_monthly if provided and seems reasonable
+    if (plan.estimated_monthly && Math.abs(plan.estimated_monthly - total) < 10) {
+      return plan.estimated_monthly;
+    }
+    
+    return total;
+  };
+  
+  const calculatedMonthly = calculateMonthlyPrice();
+
+  // Debug: Log when plan updates (after calculations)
+  useEffect(() => {
+    if (plan?.recommended_products && catalog) {
+      console.log("SmartHomePlan: Plan updated", {
+        productCount: plan.recommended_products.length,
+        products: plan.recommended_products.map(r => `${r.room}: ${r.product_id}`),
+        backendBundle: plan.recommended_bundle_id,
+        recalculatedBundle: bundle?.bundle_id || "none",
+        bundleName: bundle?.name || "none",
+        monthly: calculatedMonthly,
+      });
+    }
+  }, [plan?.recommended_products, plan?.recommended_bundle_id, plan?.estimated_monthly, catalog, bundle, calculatedMonthly]);
 
   if (!isVisible) {
     return (
@@ -183,15 +296,72 @@ const SmartHomePlan = ({ isVisible, plan }: SmartHomePlanProps) => {
               );
             })}
           </div>
+          {/* Show additional products not in bundle */}
+          {bundle && plan?.recommended_products && (() => {
+            const bundleItems = new Set(bundle.items || []);
+            const recommendedProductIds = new Set(
+              plan.recommended_products.map((r) => r.product_id)
+            );
+            const additionalProducts = [...recommendedProductIds].filter(
+              (pid) => !bundleItems.has(pid)
+            );
+            
+            if (additionalProducts.length > 0) {
+              return (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground mb-2">Additional products:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {additionalProducts.map((itemId) => {
+                      const name = productMap[itemId]?.name ?? itemId;
+                      const price = productMap[itemId]?.price ?? 0;
+                      return (
+                        <div
+                          key={itemId}
+                          className="flex items-center gap-1.5 bg-card rounded-full px-3 py-1.5 shadow-sm"
+                        >
+                          <span className="text-xs font-medium text-foreground">{name}</span>
+                          <span className="text-xs text-muted-foreground">+AED {price}/mo</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         <div className="flex items-end justify-between">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Monthly price</p>
             <p className="text-3xl font-bold text-foreground">
-              AED {plan.estimated_monthly ?? bundle?.bundle_monthly ?? 0}
+              AED {calculatedMonthly}
               <span className="text-base font-normal text-muted-foreground">/mo</span>
             </p>
+            {/* Show breakdown if bundle + additional products */}
+            {bundle && plan?.recommended_products && (() => {
+              const bundleItems = new Set(bundle.items || []);
+              const recommendedProductIds = new Set(
+                plan.recommended_products.map((r) => r.product_id)
+              );
+              const additionalProducts = [...recommendedProductIds].filter(
+                (pid) => !bundleItems.has(pid)
+              );
+              
+              if (additionalProducts.length > 0 && bundle.bundle_monthly) {
+                const additionalTotal = additionalProducts.reduce(
+                  (sum, pid) => sum + (productMap[pid]?.price ?? 0),
+                  0
+                );
+                return (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Bundle: AED {bundle.bundle_monthly}/mo + Additional: AED {additionalTotal}/mo
+                  </p>
+                );
+              }
+              return null;
+            })()}
           </div>
           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 py-5 font-semibold shadow-button transition-all duration-300 hover:shadow-lg hover:scale-105">
             Upgrade My Home

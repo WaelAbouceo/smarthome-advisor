@@ -1,6 +1,6 @@
-# Frontend - Smart Living Advisor
+# Frontend - Smart Living AI buddy
 
-React frontend for Smart Living Advisor - Demo v0
+React frontend for Smart Living AI buddy - Demo v0
 
 ## Quick Start
 

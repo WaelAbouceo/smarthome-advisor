@@ -1,15 +1,18 @@
 {
-  "version": "demo-1.0",
+  "version": "demo-2.0",
   "currency": "AED",
+
   "products": [
     {
       "product_id": "P_WIFI_MESH_01",
       "name": "e& Wi-Fi Mesh Pro",
       "category": "Connectivity",
-      "tags": ["wifi", "mesh", "whole-home"],
+      "tags": ["wifi", "mesh", "whole-home", "coverage"],
       "price_monthly": 49,
       "price_one_time": 399,
       "compatibility": ["apartment", "villa", "office"],
+      "rooms": ["all"],
+      "priority": 10,
       "notes": "Best for multi-room coverage and stable streaming."
     },
     {
@@ -20,6 +23,8 @@
       "price_monthly": 19,
       "price_one_time": 199,
       "compatibility": ["apartment", "villa", "office"],
+      "rooms": ["living", "kids", "entrance"],
+      "priority": 9,
       "notes": "Ideal for entrances, living rooms, or kids areas."
     },
     {
@@ -30,17 +35,9 @@
       "price_monthly": 29,
       "price_one_time": 299,
       "compatibility": ["villa", "office"],
+      "rooms": ["garden", "gate", "parking"],
+      "priority": 9,
       "notes": "Best for gates, gardens, and perimeter security."
-    },
-    {
-      "product_id": "P_TV_BOX_01",
-      "name": "evision 4K Box",
-      "category": "Entertainment",
-      "tags": ["tv", "iptv", "4k"],
-      "price_monthly": 25,
-      "price_one_time": 149,
-      "compatibility": ["apartment", "villa", "office"],
-      "notes": "4K streaming + TV experience."
     },
     {
       "product_id": "P_SMART_LOCK_01",
@@ -50,23 +47,140 @@
       "price_monthly": 35,
       "price_one_time": 499,
       "compatibility": ["apartment", "villa", "office"],
-      "notes": "Access control with PIN + app unlock."
+      "rooms": ["main_door"],
+      "priority": 10,
+      "notes": "Access control with PIN + mobile unlock."
+    },
+    {
+      "product_id": "P_SENSOR_DOOR_01",
+      "name": "Door & Window Sensor",
+      "category": "Security",
+      "tags": ["sensor", "door", "window"],
+      "price_monthly": 5,
+      "price_one_time": 79,
+      "compatibility": ["apartment", "villa"],
+      "rooms": ["doors", "windows"],
+      "priority": 8,
+      "notes": "Instant alerts when doors or windows open."
+    },
+    {
+      "product_id": "P_SENSOR_MOTION_01",
+      "name": "Motion Sensor",
+      "category": "Security",
+      "tags": ["sensor", "motion"],
+      "price_monthly": 6,
+      "price_one_time": 119,
+      "compatibility": ["apartment", "villa", "office"],
+      "rooms": ["hallway", "living", "office"],
+      "priority": 8,
+      "notes": "Triggers automation and security alerts."
+    },
+    {
+      "product_id": "P_SMART_SWITCH_01",
+      "name": "Smart Light Switch",
+      "category": "Automation",
+      "tags": ["switch", "lighting", "energy"],
+      "price_monthly": 9,
+      "price_one_time": 199,
+      "compatibility": ["apartment", "villa", "office"],
+      "rooms": ["all"],
+      "priority": 7,
+      "notes": "Automated lighting control and scheduling."
+    },
+    {
+      "product_id": "P_SMART_THERMOSTAT_01",
+      "name": "Smart Thermostat",
+      "category": "Energy",
+      "tags": ["thermostat", "ac", "energy-saving"],
+      "price_monthly": 15,
+      "price_one_time": 399,
+      "compatibility": ["villa", "office"],
+      "rooms": ["living", "bedroom"],
+      "priority": 8,
+      "notes": "Optimizes cooling to reduce electricity bills."
+    },
+    {
+      "product_id": "P_TV_BOX_01",
+      "name": "evision 4K Box",
+      "category": "Entertainment",
+      "tags": ["tv", "iptv", "4k"],
+      "price_monthly": 25,
+      "price_one_time": 149,
+      "compatibility": ["apartment", "villa", "office"],
+      "rooms": ["living", "bedroom"],
+      "priority": 7,
+      "notes": "4K streaming and full TV experience."
+    },
+    {
+      "product_id": "P_SMART_SPEAKER_01",
+      "name": "Smart Voice Speaker",
+      "category": "Assistant",
+      "tags": ["voice", "assistant", "alexa"],
+      "price_monthly": 12,
+      "price_one_time": 199,
+      "compatibility": ["apartment", "villa", "office"],
+      "rooms": ["living", "bedroom", "kitchen"],
+      "priority": 8,
+      "notes": "Voice control for the entire smart home."
+    },
+    {
+      "product_id": "P_ROBOT_VAC_01",
+      "name": "Robot Vacuum Cleaner",
+      "category": "Lifestyle",
+      "tags": ["vacuum", "cleaning", "robot"],
+      "price_monthly": 20,
+      "price_one_time": 499,
+      "compatibility": ["apartment", "villa"],
+      "rooms": ["all"],
+      "priority": 6,
+      "notes": "Automated floor cleaning with scheduling."
     }
   ],
+
   "bundles": [
     {
       "bundle_id": "B_SECURE_HOME",
       "name": "Secure Home Bundle",
-      "items": ["P_WIFI_MESH_01", "P_CAM_INDOOR_01", "P_SMART_LOCK_01"],
+      "items": [
+        "P_WIFI_MESH_01",
+        "P_CAM_INDOOR_01",
+        "P_SMART_LOCK_01",
+        "P_SENSOR_DOOR_01",
+        "P_SENSOR_MOTION_01"
+      ],
       "bundle_monthly": 89,
-      "bundle_notes": "Security-first + strong Wi-Fi coverage."
+      "priority": 10,
+      "bundle_notes": "Full home protection with connectivity and sensors."
     },
     {
       "bundle_id": "B_ENTERTAIN_PLUS",
       "name": "Entertainment Plus Bundle",
-      "items": ["P_WIFI_MESH_01", "P_TV_BOX_01"],
+      "items": [
+        "P_WIFI_MESH_01",
+        "P_TV_BOX_01",
+        "P_SMART_SPEAKER_01"
+      ],
       "bundle_monthly": 69,
-      "bundle_notes": "Best for heavy streaming and stable 4K."
+      "priority": 8,
+      "bundle_notes": "Optimized for streaming, voice control, and coverage."
+    },
+    {
+      "bundle_id": "B_SMART_LIVING_FULL",
+      "name": "Smart Living Full Experience",
+      "items": [
+        "P_WIFI_MESH_01",
+        "P_CAM_INDOOR_01",
+        "P_CAM_OUTDOOR_01",
+        "P_SMART_LOCK_01",
+        "P_SENSOR_DOOR_01",
+        "P_SENSOR_MOTION_01",
+        "P_SMART_SWITCH_01",
+        "P_SMART_THERMOSTAT_01",
+        "P_SMART_SPEAKER_01"
+      ],
+      "bundle_monthly": 149,
+      "priority": 10,
+      "bundle_notes": "Complete smart home automation, security, and comfort."
     }
   ]
 }

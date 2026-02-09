@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
@@ -10,7 +11,8 @@ from app.repositories.crm_repo import CRMRepository
 from app.repositories.product_repo import ProductRepository
 from app.services.persona.persona_builder import build_persona
 from app.services.recommendation.recommender import recommend
-from app.services.llm.llm_openai import generate_advisor_response
+from app.services.recommendation.llm_recommender import recommend_with_llm_fallback
+from app.services.llm.llm_openai import generate_advisor_response, _openai_client
 from app.services.llm.llm_stub import stream_text
 
 router = APIRouter()
@@ -18,6 +20,9 @@ logger = get_logger("api.advisor")
 
 crm = CRMRepository()
 prod = ProductRepository()
+
+# Feature flag for LLM recommendations (default: enabled)
+ENABLE_LLM_RECOMMENDATIONS = os.getenv("ENABLE_LLM_RECOMMENDATIONS", "true").lower() == "true"
 
 # In-memory demo store for layouts analyzed (layout_id -> layout dict)
 _LAYOUT_STORE: dict[str, dict] = {}
@@ -63,6 +68,87 @@ def _log_conversation(last_user: str | None, reply: str, action: str) -> None:
     logger.info("--- Advisor ---\n  In:  %s\n  Out: %s\n  Action: %s", inp, out, action)
 
 
+def _should_generate_recommendations(
+    layout: dict,
+    messages: list[dict[str, str]],
+) -> bool:
+    """
+    Determine if recommendations should be generated.
+    
+    Recommendations are generated when:
+    1. User explicitly asks for recommendations (keywords: "recommend", "suggest", "what do you recommend")
+    2. Layout is confirmed (has rooms) AND user has expressed preferences (security, entertainment, wifi, etc.)
+    3. Previous assistant action was "offer_plan" (updating existing plan)
+    
+    Returns True if recommendations should be generated, False otherwise.
+    """
+    if not messages:
+        return False
+    
+    # Check last few user messages for explicit recommendation requests
+    recommendation_keywords = [
+        "recommend", "suggest", "what do you", "what should", "what would",
+        "show me", "give me", "tell me about", "options", "products"
+    ]
+    
+    # Check last 3 user messages
+    recent_user_messages = [
+        msg.get("content", "").lower()
+        for msg in messages[-6:]  # Check last 6 messages (3 turns)
+        if msg.get("role") == "user"
+    ]
+    
+    for msg in recent_user_messages:
+        if any(keyword in msg for keyword in recommendation_keywords):
+            logger.debug("Recommendations needed: user explicitly asked for recommendations")
+            return True
+    
+    # Check if layout is confirmed (has rooms)
+    has_layout = bool(layout.get("rooms"))
+    if not has_layout:
+        logger.debug("Recommendations skipped: no layout confirmed")
+        return False
+    
+    # Check if user has expressed preferences (with typo tolerance)
+    preference_keywords = {
+        "security": ["security", "safe", "secure", "camera", "lock", "monitor", "protect"],
+        "entertainment": ["streaming", "streamin", "stream", "tv", "entertainment", "netflix", "watch", "movie", "show", "entertain"],
+        "wifi": ["wifi", "wi-fi", "wi fi", "internet", "connection", "network", "coverage", "signal", "strong wifi", "strong wifi", "powerful wifi"],
+        "budget": ["budget", "cheap", "affordable", "cost", "price", "expensive"],
+        "convenience": ["easy", "simple", "convenient", "automate", "smart"]
+    }
+    
+    has_preferences = False
+    for category, keywords in preference_keywords.items():
+        for msg in recent_user_messages:
+            if any(keyword in msg for keyword in keywords):
+                has_preferences = True
+                logger.debug("Recommendations needed: user expressed %s preferences", category)
+                break
+        if has_preferences:
+            break
+    
+    if has_preferences:
+        return True
+    
+    # Check if previous assistant action was "offer_plan" (updating existing plan)
+    # Look for assistant messages that mention products or prices (indicating plan was offered)
+    recent_assistant_messages = [
+        msg.get("content", "").lower()
+        for msg in messages[-4:]
+        if msg.get("role") == "assistant"
+    ]
+    
+    plan_indicators = ["aed", "month", "bundle", "mesh", "camera", "lock", "recommend"]
+    for msg in recent_assistant_messages:
+        if any(indicator in msg for indicator in plan_indicators):
+            logger.debug("Recommendations needed: updating existing plan")
+            return True
+    
+    logger.debug("Recommendations skipped: layout confirmed but no preferences expressed yet")
+    return False
+
+
 @router.post("/chat")
 def advisor_chat(req: AdvisorChatRequest):
     profile = crm.get_profile(req.customer_id)
@@ -86,11 +172,35 @@ def advisor_chat(req: AdvisorChatRequest):
             conf = layout.get("layout_confidence") or layout.get("confidence", 0)
             logger.debug("advisor/chat layout found layout_id=%s rooms=%d confidence=%.2f", req.layout_id, rooms_count, conf)
 
-    recos, bundle_id, est_monthly = recommend(profile, layout, product_map, bundles)
-    logger.debug("advisor/chat recos=%d bundle_id=%s est_monthly=%s", len(recos), bundle_id, est_monthly)
+    # Only generate recommendations when needed (optimization)
+    messages_for_llm = [{"role": m.role, "content": m.content} for m in (req.messages or [])]
+    llm_client = _openai_client()
+    
+    should_gen_recos = _should_generate_recommendations(layout, messages_for_llm)
+    
+    if should_gen_recos:
+        logger.debug("advisor/chat generating recommendations (user asked or preferences expressed)")
+        try:
+            recos, bundle_id, est_monthly = recommend_with_llm_fallback(
+                profile=profile,
+                layout=layout,
+                product_map=product_map,
+                bundles=bundles,
+                conversation_history=messages_for_llm,
+                llm_client=llm_client,
+                enable_llm=ENABLE_LLM_RECOMMENDATIONS,
+            )
+        except Exception as e:
+            logger.warning("LLM recommendation failed, using rule-based fallback: %s", e, exc_info=True)
+            # Fallback to rule-based
+            recos, bundle_id, est_monthly = recommend(profile, layout, product_map, bundles)
+        logger.debug("advisor/chat recos=%d bundle_id=%s est_monthly=%s", len(recos), bundle_id, est_monthly)
+    else:
+        # Skip recommendation generation - advisor will respond conversationally without products
+        logger.debug("advisor/chat skipping recommendations (not needed yet)")
+        recos, bundle_id, est_monthly = [], None, None
 
     product_names = {pid: p.get("name", pid) for pid, p in product_map.items()}
-    messages_for_llm = [{"role": m.role, "content": m.content} for m in (req.messages or [])]
 
     result = generate_advisor_response(
         persona={"name": profile.get("name"), **persona_obj.model_dump()},
@@ -100,6 +210,7 @@ def advisor_chat(req: AdvisorChatRequest):
         bundle_id=bundle_id,
         estimated_monthly=est_monthly,
         product_names=product_names,
+        profile=profile,
     )
     if result is None:
         raise HTTPException(
@@ -107,6 +218,44 @@ def advisor_chat(req: AdvisorChatRequest):
             detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
         )
     reply, action, layout_updates = result
+
+    # CRITICAL: If advisor wants to offer plan but we skipped recommendations, generate them now
+    # This ensures LLM always has actual recommendations to use (not hallucinated products)
+    if action == "offer_plan" and not recos:
+        logger.warning("advisor/chat advisor wants to offer plan but no recommendations exist - generating now")
+        try:
+            recos, bundle_id, est_monthly = recommend_with_llm_fallback(
+                profile=profile,
+                layout=layout,
+                product_map=product_map,
+                bundles=bundles,
+                conversation_history=messages_for_llm,
+                llm_client=llm_client,
+                enable_llm=ENABLE_LLM_RECOMMENDATIONS,
+            )
+            logger.info("advisor/chat generated recommendations on-demand: recos=%d bundle_id=%s", len(recos), bundle_id)
+        except Exception as e:
+            logger.warning("On-demand recommendation generation failed, using rule-based: %s", e, exc_info=True)
+            recos, bundle_id, est_monthly = recommend(profile, layout, product_map, bundles)
+        
+        # Re-generate advisor response with actual recommendations
+        product_names = {pid: p.get("name", pid) for pid, p in product_map.items()}
+        result = generate_advisor_response(
+            persona={"name": profile.get("name"), **persona_obj.model_dump()},
+            layout=layout,
+            messages=messages_for_llm,
+            recos=[r.model_dump() for r in recos],
+            bundle_id=bundle_id,
+            estimated_monthly=est_monthly,
+            product_names=product_names,
+            profile=profile,
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+            )
+        reply, action, layout_updates = result
 
     # Merge LLM layout updates if present
     if layout_updates and req.layout_id:
@@ -212,9 +361,35 @@ def advisor_chat_stream(req: AdvisorChatRequest):
                 req.layout_id, rooms_count, conf, source_file
             )
 
-    recos, bundle_id, est_monthly = recommend(profile, layout, product_map, bundles)
-    product_names = {pid: p.get("name", pid) for pid, p in product_map.items()}
+    # Only generate recommendations when needed (optimization)
     messages_for_llm = [{"role": m.role, "content": m.content} for m in (req.messages or [])]
+    llm_client = _openai_client()
+    
+    should_gen_recos = _should_generate_recommendations(layout, messages_for_llm)
+    
+    if should_gen_recos:
+        logger.debug("advisor/chat/stream generating recommendations (user asked or preferences expressed)")
+        try:
+            recos, bundle_id, est_monthly = recommend_with_llm_fallback(
+                profile=profile,
+                layout=layout,
+                product_map=product_map,
+                bundles=bundles,
+                conversation_history=messages_for_llm,
+                llm_client=llm_client,
+                enable_llm=ENABLE_LLM_RECOMMENDATIONS,
+            )
+        except Exception as e:
+            logger.warning("LLM recommendation failed, using rule-based fallback: %s", e, exc_info=True)
+            # Fallback to rule-based
+            recos, bundle_id, est_monthly = recommend(profile, layout, product_map, bundles)
+        logger.debug("advisor/chat/stream recos=%d bundle_id=%s est_monthly=%s", len(recos), bundle_id, est_monthly)
+    else:
+        # Skip recommendation generation - advisor will respond conversationally without products
+        logger.debug("advisor/chat/stream skipping recommendations (not needed yet)")
+        recos, bundle_id, est_monthly = [], None, None
+    
+    product_names = {pid: p.get("name", pid) for pid, p in product_map.items()}
 
     result = generate_advisor_response(
         persona={"name": profile.get("name"), **persona_obj.model_dump()},
@@ -224,6 +399,7 @@ def advisor_chat_stream(req: AdvisorChatRequest):
         bundle_id=bundle_id,
         estimated_monthly=est_monthly,
         product_names=product_names,
+        profile=profile,
     )
     if result is None:
         raise HTTPException(
@@ -231,6 +407,82 @@ def advisor_chat_stream(req: AdvisorChatRequest):
             detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
         )
     reply, action, layout_updates = result
+
+    # CRITICAL: If advisor wants to offer plan but we skipped recommendations, generate them now
+    # This ensures LLM always has actual recommendations to use (not hallucinated products)
+    if action == "offer_plan" and not recos:
+        logger.warning("advisor/chat/stream advisor wants to offer plan but no recommendations exist - generating now")
+        try:
+            recos, bundle_id, est_monthly = recommend_with_llm_fallback(
+                profile=profile,
+                layout=layout,
+                product_map=product_map,
+                bundles=bundles,
+                conversation_history=messages_for_llm,
+                llm_client=llm_client,
+                enable_llm=ENABLE_LLM_RECOMMENDATIONS,
+            )
+            logger.info("advisor/chat/stream generated recommendations on-demand: recos=%d bundle_id=%s", len(recos), bundle_id)
+        except Exception as e:
+            logger.warning("On-demand recommendation generation failed, using rule-based: %s", e, exc_info=True)
+            recos, bundle_id, est_monthly = recommend(profile, layout, product_map, bundles)
+        
+        # Re-generate advisor response with actual recommendations
+        product_names = {pid: p.get("name", pid) for pid, p in product_map.items()}
+        result = generate_advisor_response(
+            persona={"name": profile.get("name"), **persona_obj.model_dump()},
+            layout=layout,
+            messages=messages_for_llm,
+            recos=[r.model_dump() for r in recos],
+            bundle_id=bundle_id,
+            estimated_monthly=est_monthly,
+            product_names=product_names,
+            profile=profile,
+        )
+    if result is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+        )
+    reply, action, layout_updates = result
+
+    # CRITICAL: If advisor wants to offer plan but we skipped recommendations, generate them now
+    # This ensures LLM always has actual recommendations to use (not hallucinated products)
+    if action == "offer_plan" and not recos:
+        logger.warning("advisor/chat/stream advisor wants to offer plan but no recommendations exist - generating now")
+        try:
+            recos, bundle_id, est_monthly = recommend_with_llm_fallback(
+                profile=profile,
+                layout=layout,
+                product_map=product_map,
+                bundles=bundles,
+                conversation_history=messages_for_llm,
+                llm_client=llm_client,
+                enable_llm=ENABLE_LLM_RECOMMENDATIONS,
+            )
+            logger.info("advisor/chat/stream generated recommendations on-demand: recos=%d bundle_id=%s", len(recos), bundle_id)
+        except Exception as e:
+            logger.warning("On-demand recommendation generation failed, using rule-based: %s", e, exc_info=True)
+            recos, bundle_id, est_monthly = recommend(profile, layout, product_map, bundles)
+        
+        # Re-generate advisor response with actual recommendations
+        product_names = {pid: p.get("name", pid) for pid, p in product_map.items()}
+        result = generate_advisor_response(
+            persona={"name": profile.get("name"), **persona_obj.model_dump()},
+            layout=layout,
+            messages=messages_for_llm,
+            recos=[r.model_dump() for r in recos],
+            bundle_id=bundle_id,
+            estimated_monthly=est_monthly,
+            product_names=product_names,
+            profile=profile,
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+            )
+        reply, action, layout_updates = result
 
     # Merge LLM layout updates if present (same logic as non-streaming endpoint)
     if layout_updates and req.layout_id:

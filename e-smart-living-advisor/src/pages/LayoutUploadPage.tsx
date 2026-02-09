@@ -38,10 +38,10 @@ const LayoutUploadPage = () => {
           <span>Upload floor plan</span>
         </div>
         <h1 className="text-2xl font-semibold text-foreground mb-2">
-          Upload your floor plan
+          Upload your apartment or villa layout
         </h1>
         <p className="text-muted-foreground text-sm mb-6">
-          PDF, JPG or PNG. We’ll detect rooms and dimensions so you can confirm or edit before recommendations.
+          PDF, image, or screenshot. Max size: 20 MB. For demo purposes, we support one floor. We'll detect rooms and dimensions so you can confirm or edit before recommendations.
         </p>
         <LayoutUpload onUpload={setFile} disabled={loading} />
         {error && (

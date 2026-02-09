@@ -20,7 +20,27 @@
       "work_from_home": true,
       "gaming": false,
       "security_sensitive": true
-    }
+    },
+    "revenue": {
+      "monthly_aed": 650,
+      "annual_aed": 7800
+    },
+    "devices": [
+      {
+        "type": "smart_speaker",
+        "brand": "Amazon",
+        "model": "Echo Dot 4th Gen"
+      },
+      {
+        "type": "smart_bulb",
+        "brand": "Philips",
+        "model": "Hue White"
+      }
+    ],
+    "account_age_years": 3.5,
+    "contract_type": "annual",
+    "payment_method": "auto_pay",
+    "previous_purchases": []
   },
   "CUST_2002": {
     "customer_id": "CUST_2002",
@@ -43,6 +63,363 @@
       "work_from_home": false,
       "gaming": true,
       "security_sensitive": false
-    }
+    },
+    "revenue": {
+      "monthly_aed": 350,
+      "annual_aed": 4200
+    },
+    "devices": [
+      {
+        "type": "smart_tv",
+        "brand": "Samsung",
+        "model": "55\" QLED"
+      }
+    ],
+    "account_age_years": 1.2,
+    "contract_type": "monthly",
+    "payment_method": "credit_card",
+    "previous_purchases": []
+  },
+  "CUST_3003": {
+    "customer_id": "CUST_3003",
+    "name": "Ahmed",
+    "segment": "Value",
+    "city": "Abu Dhabi",
+    "services": {
+      "internet_plan": "eLife Basic",
+      "internet_speed_mbps": 100,
+      "tv_plan": null,
+      "voice_line": false
+    },
+    "household": {
+      "adults": 1,
+      "kids": 0,
+      "pets": 0
+    },
+    "usage": {
+      "streaming_heavy": false,
+      "work_from_home": false,
+      "gaming": false,
+      "security_sensitive": false
+    },
+    "revenue": {
+      "monthly_aed": 150,
+      "annual_aed": 1800
+    },
+    "devices": [],
+    "account_age_years": 0.5,
+    "contract_type": "monthly",
+    "payment_method": "debit_card",
+    "previous_purchases": []
+  },
+  "CUST_4004": {
+    "customer_id": "CUST_4004",
+    "name": "Fatima",
+    "segment": "Premium",
+    "city": "Dubai",
+    "services": {
+      "internet_plan": "eLife Ultra",
+      "internet_speed_mbps": 1000,
+      "tv_plan": "evision Max",
+      "voice_line": true
+    },
+    "household": {
+      "adults": 2,
+      "kids": 3,
+      "pets": 2
+    },
+    "usage": {
+      "streaming_heavy": true,
+      "work_from_home": true,
+      "gaming": true,
+      "security_sensitive": true
+    },
+    "revenue": {
+      "monthly_aed": 850,
+      "annual_aed": 10200
+    },
+    "devices": [
+      {
+        "type": "smart_speaker",
+        "brand": "Google",
+        "model": "Nest Mini"
+      },
+      {
+        "type": "smart_lock",
+        "brand": "Yale",
+        "model": "Assure Lock"
+      },
+      {
+        "type": "smart_thermostat",
+        "brand": "Nest",
+        "model": "Learning Thermostat"
+      },
+      {
+        "type": "smart_camera",
+        "brand": "Ring",
+        "model": "Indoor Cam"
+      }
+    ],
+    "account_age_years": 5.0,
+    "contract_type": "annual",
+    "payment_method": "auto_pay",
+    "previous_purchases": ["P_SMART_DOOR_LOCK", "P_SMART_INDOOR_CAMERA"]
+  },
+  "CUST_5005": {
+    "customer_id": "CUST_5005",
+    "name": "Omar",
+    "segment": "Mid",
+    "city": "Sharjah",
+    "services": {
+      "internet_plan": "eLife Plus",
+      "internet_speed_mbps": 350,
+      "tv_plan": "evision Plus",
+      "voice_line": true
+    },
+    "household": {
+      "adults": 2,
+      "kids": 1,
+      "pets": 0
+    },
+    "usage": {
+      "streaming_heavy": true,
+      "work_from_home": true,
+      "gaming": false,
+      "security_sensitive": true
+    },
+    "revenue": {
+      "monthly_aed": 450,
+      "annual_aed": 5400
+    },
+    "devices": [
+      {
+        "type": "smart_speaker",
+        "brand": "Amazon",
+        "model": "Echo Show 8"
+      },
+      {
+        "type": "smart_bulb",
+        "brand": "TP-Link",
+        "model": "Kasa Smart Bulb"
+      }
+    ],
+    "account_age_years": 2.3,
+    "contract_type": "monthly",
+    "payment_method": "credit_card",
+    "previous_purchases": []
+  },
+  "CUST_6006": {
+    "customer_id": "CUST_6006",
+    "name": "Sarah",
+    "segment": "Premium",
+    "city": "Dubai",
+    "services": {
+      "internet_plan": "eLife Ultra",
+      "internet_speed_mbps": 500,
+      "tv_plan": "evision Max",
+      "voice_line": true
+    },
+    "household": {
+      "adults": 1,
+      "kids": 0,
+      "pets": 0
+    },
+    "usage": {
+      "streaming_heavy": false,
+      "work_from_home": true,
+      "gaming": false,
+      "security_sensitive": true
+    },
+    "revenue": {
+      "monthly_aed": 600,
+      "annual_aed": 7200
+    },
+    "devices": [
+      {
+        "type": "smart_lock",
+        "brand": "August",
+        "model": "Smart Lock Pro"
+      },
+      {
+        "type": "smart_camera",
+        "brand": "Arlo",
+        "model": "Essential Spotlight"
+      }
+    ],
+    "account_age_years": 4.2,
+    "contract_type": "annual",
+    "payment_method": "bank_transfer",
+    "previous_purchases": ["P_SMART_DOOR_LOCK"]
+  },
+  "CUST_7007": {
+    "customer_id": "CUST_7007",
+    "name": "Khalid",
+    "segment": "Value",
+    "city": "Ajman",
+    "services": {
+      "internet_plan": "eLife Basic",
+      "internet_speed_mbps": 100,
+      "tv_plan": "evision Basic",
+      "voice_line": false
+    },
+    "household": {
+      "adults": 2,
+      "kids": 2,
+      "pets": 0
+    },
+    "usage": {
+      "streaming_heavy": true,
+      "work_from_home": false,
+      "gaming": false,
+      "security_sensitive": false
+    },
+    "revenue": {
+      "monthly_aed": 200,
+      "annual_aed": 2400
+    },
+    "devices": [
+      {
+        "type": "smart_tv",
+        "brand": "LG",
+        "model": "43\" LED"
+      }
+    ],
+    "account_age_years": 0.8,
+    "contract_type": "monthly",
+    "payment_method": "debit_card",
+    "previous_purchases": []
+  },
+  "CUST_8008": {
+    "customer_id": "CUST_8008",
+    "name": "Layla",
+    "segment": "Mid",
+    "city": "Dubai",
+    "services": {
+      "internet_plan": "eLife Starter",
+      "internet_speed_mbps": 250,
+      "tv_plan": "evision Plus",
+      "voice_line": true
+    },
+    "household": {
+      "adults": 1,
+      "kids": 1,
+      "pets": 1
+    },
+    "usage": {
+      "streaming_heavy": true,
+      "work_from_home": false,
+      "gaming": true,
+      "security_sensitive": true
+    },
+    "revenue": {
+      "monthly_aed": 380,
+      "annual_aed": 4560
+    },
+    "devices": [
+      {
+        "type": "smart_speaker",
+        "brand": "Apple",
+        "model": "HomePod Mini"
+      },
+      {
+        "type": "smart_bulb",
+        "brand": "Nanoleaf",
+        "model": "Essentials A19"
+      }
+    ],
+    "account_age_years": 1.8,
+    "contract_type": "monthly",
+    "payment_method": "credit_card",
+    "previous_purchases": []
+  },
+  "CUST_9009": {
+    "customer_id": "CUST_9009",
+    "name": "Youssef",
+    "segment": "Premium",
+    "city": "Abu Dhabi",
+    "services": {
+      "internet_plan": "eLife Ultra",
+      "internet_speed_mbps": 1000,
+      "tv_plan": "evision Max",
+      "voice_line": true
+    },
+    "household": {
+      "adults": 2,
+      "kids": 0,
+      "pets": 0
+    },
+    "usage": {
+      "streaming_heavy": true,
+      "work_from_home": true,
+      "gaming": true,
+      "security_sensitive": true
+    },
+    "revenue": {
+      "monthly_aed": 900,
+      "annual_aed": 10800
+    },
+    "devices": [
+      {
+        "type": "smart_speaker",
+        "brand": "Amazon",
+        "model": "Echo Studio"
+      },
+      {
+        "type": "smart_tv",
+        "brand": "Sony",
+        "model": "65\" OLED"
+      },
+      {
+        "type": "smart_lock",
+        "brand": "Schlage",
+        "model": "Encode Plus"
+      },
+      {
+        "type": "smart_thermostat",
+        "brand": "Ecobee",
+        "model": "SmartThermostat"
+      },
+      {
+        "type": "smart_camera",
+        "brand": "Ring",
+        "model": "Video Doorbell Pro"
+      }
+    ],
+    "account_age_years": 6.5,
+    "contract_type": "annual",
+    "payment_method": "auto_pay",
+    "previous_purchases": ["P_WIFI_MESH_PRO", "P_SMART_DOOR_LOCK"]
+  },
+  "CUST_1010": {
+    "customer_id": "CUST_1010",
+    "name": "Noor",
+    "segment": "Value",
+    "city": "Ras Al Khaimah",
+    "services": {
+      "internet_plan": "eLife Basic",
+      "internet_speed_mbps": 100,
+      "tv_plan": null,
+      "voice_line": false
+    },
+    "household": {
+      "adults": 1,
+      "kids": 0,
+      "pets": 0
+    },
+    "usage": {
+      "streaming_heavy": false,
+      "work_from_home": true,
+      "gaming": false,
+      "security_sensitive": false
+    },
+    "revenue": {
+      "monthly_aed": 120,
+      "annual_aed": 1440
+    },
+    "devices": [],
+    "account_age_years": 0.3,
+    "contract_type": "monthly",
+    "payment_method": "debit_card",
+    "previous_purchases": []
   }
 }

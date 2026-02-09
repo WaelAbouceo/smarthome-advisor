@@ -1,6 +1,6 @@
 # Backend API Documentation
 
-FastAPI backend for Smart Living Advisor - Demo v0
+FastAPI backend for Smart Living AI buddy - Demo v0
 
 ## API Endpoints
 

@@ -1,4 +1,4 @@
-import { Home, DoorOpen, FileText, MapPin, ImageIcon, AlertCircle } from "lucide-react";
+import { Home, DoorOpen, FileText, MapPin, ImageIcon, AlertCircle, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -7,8 +7,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useState } from "react";
 import type { LayoutAnalysis, LayoutRoom } from "@/lib/api";
 import { CONFIDENCE_THRESHOLD, ROOM_TYPES, ROOM_TYPE_LABELS } from "@/utils/constants";
+import { Button } from "@/components/ui/button";
 
 function roomTypeLabel(type: string): string {
   return ROOM_TYPE_LABELS[type?.toLowerCase()] ?? type ?? "Room";
@@ -30,6 +32,7 @@ interface LayoutSummaryProps {
  * Supports bidirectional synchronization with chat panel.
  */
 const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps) => {
+  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default for smoother experience
   const layoutType = (layout.layout_type || "home").replace(/^./, (c) => c.toUpperCase());
   const rooms = layout.rooms ?? [];
   const entryPoints = layout.entry_points ?? [];
@@ -37,6 +40,32 @@ const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps)
   const confidence = layout.confidence ?? 1;
   const isConfident = confidence >= CONFIDENCE_THRESHOLD;
   const editable = typeof onLayoutChange === "function";
+
+  // Calculate total area for summary
+  const calculateTotalArea = () => {
+    const currentRooms = layout.rooms ?? [];
+    const numericAreas = currentRooms.map((r) => {
+      const w = typeof r.width === "number" ? r.width : parseFloat(String(r.width ?? "").replace(/[^\d.]/g, "") || "0");
+      const l = typeof r.length === "number" ? r.length : parseFloat(String(r.length ?? "").replace(/[^\d.]/g, "") || "0");
+      if (!Number.isNaN(w) && !Number.isNaN(l) && w > 0 && l > 0) {
+        return w * l;
+      }
+      const storedArea = typeof r.area === "number" ? r.area : parseFloat(String(r.area ?? "").replace(/[^\d.]/g, "") || "0");
+      return Number.isNaN(storedArea) ? 0 : storedArea;
+    }).filter((n) => !Number.isNaN(n) && n > 0);
+    const roomsTotalArea = numericAreas.length > 0 ? numericAreas.reduce((a, b) => a + b, 0) : 0;
+    
+    if (layout.total_area) {
+      const totalMatch = String(layout.total_area).match(/[\d.]+/);
+      if (totalMatch) {
+        return parseFloat(totalMatch[0]);
+      }
+    }
+    return roomsTotalArea > 0 ? roomsTotalArea : null;
+  };
+
+  const totalArea = calculateTotalArea();
+  const areaUnit = layout.measurement_units === "ft" ? "sq ft" : "m²";
 
   // BIDIRECTIONAL SYNC: Panel → Chat
   // When user edits room (name, type, width, length), update layout state
@@ -63,16 +92,80 @@ const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps)
 
   return (
     <div className="card-premium p-5 animate-fade-in">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-          <Home className="w-4 h-4 text-primary" />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Home className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Your layout</h3>
+            <p className="text-xs text-muted-foreground">What we detected from your floor plan</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-base font-semibold text-foreground">Your layout</h3>
-          <p className="text-xs text-muted-foreground">What we detected from your floor plan</p>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="h-8 w-8 p-0"
+          aria-label={isExpanded ? "Collapse layout" : "Expand layout"}
+        >
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          )}
+        </Button>
       </div>
 
+      {/* Collapsed Summary View */}
+      {!isExpanded && (
+        <div className="space-y-2 mb-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Type:</span>
+            <span className="font-medium text-foreground capitalize">{layoutType}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Spaces:</span>
+            <span className="font-medium text-foreground">
+              {rooms.length} {rooms.length === 1 ? 'space' : 'spaces'}
+              {rooms.length > 0 && (() => {
+                const bedrooms = rooms.filter(r => (r.room_type ?? '').toLowerCase() === 'bedroom').length;
+                const bathrooms = rooms.filter(r => (r.room_type ?? '').toLowerCase() === 'bathroom').length;
+                const living = rooms.filter(r => (r.room_type ?? '').toLowerCase() === 'living').length;
+                const kitchen = rooms.filter(r => (r.room_type ?? '').toLowerCase() === 'kitchen').length;
+                const details = [];
+                if (bedrooms > 0) details.push(`${bedrooms} bed${bedrooms > 1 ? 's' : ''}`);
+                if (bathrooms > 0) details.push(`${bathrooms} bath${bathrooms > 1 ? 's' : ''}`);
+                if (living > 0) details.push(`${living} living`);
+                if (kitchen > 0) details.push(`${kitchen} kitchen`);
+                return details.length > 0 ? (
+                  <span className="text-xs text-muted-foreground ml-1 font-normal">
+                    ({details.join(', ')})
+                  </span>
+                ) : null;
+              })()}
+            </span>
+          </div>
+          {totalArea && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total area:</span>
+              <span className="font-medium text-foreground">
+                {totalArea % 1 === 0 ? totalArea : totalArea.toFixed(1)} {areaUnit}
+              </span>
+            </div>
+          )}
+          {!isConfident && (
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Needs confirmation</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Expanded Full View */}
+      {isExpanded && (
+        <>
       {!isConfident && (
         <div className="mb-4 flex gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
           <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -85,20 +178,47 @@ const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps)
         </div>
       )}
 
-      {imageUrl ? (
-        <div className="mb-4 rounded-xl overflow-hidden border border-border/50 bg-muted/30">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-3 py-2 border-b border-border/50">
-            Original shared plan
-          </p>
-          <div className="relative min-h-[160px] max-h-[280px] flex items-center justify-center p-2">
-            <img
-              src={imageUrl}
-              alt="Your floor plan"
-              className="max-w-full max-h-[260px] w-auto h-auto object-contain rounded-lg"
-            />
+      {imageUrl ? (() => {
+        const isPDF = layout.source_filename?.toLowerCase().endsWith('.pdf') || imageUrl.toLowerCase().includes('.pdf') || imageUrl.toLowerCase().includes('application/pdf');
+        
+        return (
+          <div className="mb-4 rounded-xl overflow-hidden border border-border/50 bg-muted/30">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Original shared plan
+              </p>
+              {isPDF && (
+                <a
+                  href={imageUrl}
+                  download={layout.source_filename || 'floor-plan.pdf'}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                  title="Download PDF"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </a>
+              )}
+            </div>
+            {isPDF ? (
+              <div className="relative w-full bg-background" style={{ minHeight: '500px', height: '600px' }}>
+                <iframe
+                  src={imageUrl}
+                  className="w-full h-full border-0 rounded-b-xl"
+                  title="Floor plan PDF"
+                />
+              </div>
+            ) : (
+              <div className="relative min-h-[200px] max-h-[400px] flex items-center justify-center p-4">
+                <img
+                  src={imageUrl}
+                  alt="Your floor plan"
+                  className="max-w-full max-h-[380px] w-auto h-auto object-contain rounded-lg shadow-sm"
+                />
+              </div>
+            )}
           </div>
-        </div>
-      ) : (
+        );
+      })() : (
         layout.source_filename && (
           <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
             <ImageIcon className="w-4 h-4 shrink-0" />
@@ -135,7 +255,7 @@ const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps)
         {rooms.length > 0 && (
           <div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-              Rooms {editable && <span className="text-muted-foreground font-normal">(edit below)</span>}
+              Spaces ({rooms.length} {rooms.length === 1 ? 'space' : 'spaces'}) {editable && <span className="text-muted-foreground font-normal">(edit below)</span>}
             </p>
             <ul className="space-y-2">
               {rooms.map((r, i) => {
@@ -325,7 +445,7 @@ const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps)
                   )}
                   {roomsTotalArea > 0 && (
                     <div className="rounded-lg bg-muted/50 border border-border/50 px-3 py-2 flex justify-between items-center">
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rooms total</span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Spaces total</span>
                       <span className="text-sm text-foreground">{roomsTotalArea % 1 === 0 ? roomsTotalArea : roomsTotalArea.toFixed(1)} {areaUnit}</span>
                     </div>
                   )}
@@ -385,6 +505,8 @@ const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps)
           </p>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };

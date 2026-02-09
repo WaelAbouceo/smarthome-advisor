@@ -1,4 +1,4 @@
-# Smart Living Advisor - Demo v0
+# Smart Living AI buddy - Demo v0
 
 AI-powered smart home advisor that analyzes floor plans and provides personalized product recommendations through natural conversation.
 

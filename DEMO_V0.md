@@ -1,11 +1,11 @@
-# Smart Living Advisor - Demo v0
+# Smart Living AI buddy - Demo v0
 
 **Status:** ✅ Locked - Stable Demo Version  
 **Date:** February 7, 2026
 
 ## Overview
 
-This is the first stable demo version of the Smart Living Advisor system. The system allows users to upload floor plans, get AI-powered room analysis, and receive personalized smart home product recommendations through a conversational interface.
+This is the first stable demo version of the Smart Living AI buddy system. The system allows users to upload floor plans, get AI-powered room analysis, and receive personalized smart home product recommendations through a conversational interface.
 
 ## Key Features
 

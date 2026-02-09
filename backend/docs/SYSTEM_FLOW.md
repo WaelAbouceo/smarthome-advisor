@@ -1,4 +1,4 @@
-# Smart Living Advisor — Step-by-Step System Flow
+# Smart Living AI buddy — Step-by-Step System Flow
 
 This document describes the full logic from user action to advisor response so we can debug and fix behavior.
 

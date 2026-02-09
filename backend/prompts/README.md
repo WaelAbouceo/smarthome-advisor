@@ -4,7 +4,7 @@ All prompts are loaded from this directory. Edit the `.md` files to change behav
 
 | File | Used by | Purpose |
 |------|---------|---------|
-| `advisor_system.md` | Advisor LLM (`llm_openai`) | System instructions for the Smart Living advisor (tone, rules, JSON output). |
+| `advisor_system.md` | Advisor LLM (`llm_openai`) | System instructions for the Smart Living AI buddy (tone, rules, JSON output). |
 | `layout_vision.md` | Layout vision (`layout_vision`) | Instructions for the vision model when analyzing a floor plan image/PDF. |
 | `layout_description.md` | Layout from description (`layout_description`) | Instructions for extracting a structured layout from natural-language description. |
 

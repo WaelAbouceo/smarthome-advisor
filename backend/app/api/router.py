@@ -4,6 +4,7 @@ from app.api.v1.profile import router as profile_router
 from app.api.v1.products import router as products_router
 from app.api.v1.layout import router as layout_router
 from app.api.v1.advisor import router as advisor_router
+from app.api.v1.admin import router as admin_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -12,3 +13,4 @@ api_router.include_router(profile_router, prefix="/profile", tags=["profile"])
 api_router.include_router(products_router, prefix="/products", tags=["products"])
 api_router.include_router(layout_router, prefix="/layout", tags=["layout"])
 api_router.include_router(advisor_router, prefix="/advisor", tags=["advisor"])
+api_router.include_router(admin_router, prefix="/admin", tags=["admin"])

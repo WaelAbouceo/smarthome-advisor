@@ -37,6 +37,7 @@ def generate_advisor_response(
     bundle_id: str | None,
     estimated_monthly: float | None,
     product_names: Dict[str, str],
+    profile: Dict[str, Any] | None = None,
 ) -> AdvisorResult | None:
     """
     Single agentic call: LLM has full context and decides next step.
@@ -110,6 +111,101 @@ def generate_advisor_response(
     # Build context: provide facts only, let LLM decide based on context + history + user intent
     context_parts = [f"Customer: {name}"]
     
+    # Include full profile information if available
+    if profile:
+        # Segment and city
+        segment = profile.get("segment")
+        city = profile.get("city")
+        if segment:
+            context_parts.append(f"Segment: {segment}")
+        if city:
+            context_parts.append(f"Location: {city}")
+        
+        # Revenue information
+        revenue = profile.get("revenue", {})
+        if revenue:
+            monthly_revenue = revenue.get("monthly_aed", 0)
+            if monthly_revenue > 0:
+                context_parts.append(f"Monthly revenue: AED {monthly_revenue}")
+        
+        # Account age
+        account_age = profile.get("account_age_years")
+        if account_age:
+            context_parts.append(f"Customer for {account_age:.1f} years")
+        
+        # Contract and payment
+        contract_type = profile.get("contract_type")
+        payment_method = profile.get("payment_method")
+        if contract_type:
+            context_parts.append(f"Contract: {contract_type}")
+        if payment_method:
+            context_parts.append(f"Payment: {payment_method.replace('_', ' ')}")
+        
+        # Household information
+        household = profile.get("household", {})
+        if household:
+            household_parts = []
+            adults = household.get("adults", 0)
+            kids = household.get("kids", 0)
+            pets = household.get("pets", 0)
+            if adults:
+                household_parts.append(f"{adults} adult{'s' if adults > 1 else ''}")
+            if kids:
+                household_parts.append(f"{kids} kid{'s' if kids > 1 else ''}")
+            if pets:
+                household_parts.append(f"{pets} pet{'s' if pets > 1 else ''}")
+            if household_parts:
+                context_parts.append(f"Household: {', '.join(household_parts)}")
+        
+        # Existing devices
+        devices = profile.get("devices", [])
+        if devices:
+            device_list = []
+            for device in devices:
+                device_type = device.get("type", "unknown").replace("_", " ")
+                brand = device.get("brand", "")
+                model = device.get("model", "")
+                device_str = device_type
+                if brand:
+                    device_str += f" ({brand}"
+                    if model:
+                        device_str += f" {model}"
+                    device_str += ")"
+                device_list.append(device_str)
+            context_parts.append(f"Existing devices: {', '.join(device_list)}")
+        
+        # Previous purchases
+        previous_purchases = profile.get("previous_purchases", [])
+        if previous_purchases:
+            context_parts.append(f"Previously purchased: {', '.join(previous_purchases)}")
+        
+        # Services
+        services = profile.get("services", {})
+        if services:
+            service_parts = []
+            internet_plan = services.get("internet_plan")
+            internet_speed = services.get("internet_speed_mbps")
+            tv_plan = services.get("tv_plan")
+            if internet_plan:
+                speed_str = f" ({internet_speed} Mbps)" if internet_speed else ""
+                service_parts.append(f"Internet: {internet_plan}{speed_str}")
+            if tv_plan:
+                service_parts.append(f"TV: {tv_plan}")
+            if service_parts:
+                context_parts.append(f"Current services: {', '.join(service_parts)}")
+        
+        # Persona traits and priorities (from persona object)
+        if persona:
+            traits = persona.get("key_traits", [])
+            priorities = persona.get("priorities", [])
+            budget_hint = persona.get("budget_hint")
+            if traits:
+                context_parts.append(f"Traits: {', '.join(traits)}")
+            if priorities:
+                context_parts.append(f"Priorities: {', '.join(priorities)}")
+            if budget_hint:
+                context_parts.append(f"Budget preference: {budget_hint}")
+    
     if has_source_file:
         context_parts.append(f"Floor plan uploaded: {layout.get('source_filename', 'floor plan')}")
     
@@ -138,17 +234,22 @@ def generate_advisor_response(
         if unassigned:
             area_parts.append(f"walls/corridors: {unassigned}")
         context += " Areas: " + ", ".join(area_parts) + ". "
-    context += f"When you present the plan, use these recommendations by room (product name + benefit): {json.dumps(by_room)}. "
-    if bundle_id:
-        context += f"Bundle: {bundle_id}. "
-    if estimated_monthly is not None:
-        context += f"Estimated monthly: AED {estimated_monthly:.0f}."
+    # Only include recommendations context if we have recommendations
+    if by_room:
+        context += f"CRITICAL: When presenting the plan, you MUST use ONLY these recommendations. Use the EXACT product names shown here. Do NOT invent or hallucinate products. Recommendations by room: {json.dumps(by_room)}. "
+        if bundle_id:
+            context += f"Bundle: {bundle_id}. "
+        if estimated_monthly is not None:
+            context += f"Estimated monthly price: AED {estimated_monthly:.0f}/month. Use this EXACT price - do NOT make up prices."
+    else:
+        # No recommendations - advisor should ask for preferences, not offer plan
+        context += "IMPORTANT: No recommendations are available yet. Use action='ask' to understand user preferences before offering a plan."
 
     system_base = get_prompt("advisor_system")
     if not system_base:
         logger.warning("advisor_system prompt file missing or empty; using minimal fallback")
         system_base = (
-            "You are an e& Smart Living advisor. Reply in JSON only: {\"reply\": \"...\", \"action\": \"ask\" or \"offer_plan\"}. "
+            "You are an e& Smart Living AI buddy. Reply in JSON only: {\"reply\": \"...\", \"action\": \"ask\" or \"offer_plan\"}. "
             "Be conversational; use the context below for layout and recommendations."
         )
     system_prompt = system_base + "\n\n---\nContext (use this information along with conversation history to understand user intent and respond naturally):\n" + context
