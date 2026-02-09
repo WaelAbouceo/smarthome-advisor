@@ -52,6 +52,145 @@ def _last_user_message(messages):
     return None
 
 
+def _normalize_llm_room(llm_room: dict, existing_room: dict | None = None) -> dict:
+    """
+    Normalize LLM room fields to match our layout schema and merge with existing room.
+    
+    LLM returns: {"room_id": "r1", "name": "...", "type": "bedroom", "width": 10, ...}
+    Our schema:  {"room_id": "r1", "room": "...", "name": "...", "room_type": "bedroom", "width": 10, ...}
+    
+    When merging with an existing room:
+    - LLM updates take priority for dimensions (width, length, area) and name changes
+    - Existing room_type is preserved UNLESS LLM explicitly provides a different "type"
+    - Existing room_id is always preserved
+    """
+    normalized = dict(llm_room)
+    
+    # Map LLM "type" -> "room_type" 
+    if "type" in normalized:
+        normalized["room_type"] = normalized.pop("type")
+    
+    # Ensure both "room" and "name" are set consistently
+    llm_name = normalized.get("name") or normalized.get("room")
+    if llm_name:
+        normalized["room"] = llm_name
+        normalized["name"] = llm_name
+    
+    if existing_room is None:
+        # New room - ensure room_type defaults to "other" if missing
+        normalized.setdefault("room_type", "other")
+        return normalized
+    
+    # Merge with existing room:
+    # Start with existing (preserves all user edits), then apply LLM changes
+    merged = dict(existing_room)
+    
+    # LLM explicitly changed the name? Use it. Otherwise keep existing.
+    existing_name = (existing_room.get("room") or existing_room.get("name") or "").lower().strip()
+    llm_name_lower = (llm_name or "").lower().strip()
+    if llm_name and llm_name_lower != existing_name:
+        merged["room"] = llm_name
+        merged["name"] = llm_name
+    
+    # LLM explicitly changed room_type? Use it. Otherwise keep existing.
+    llm_room_type = normalized.get("room_type")
+    if llm_room_type and llm_room_type != existing_room.get("room_type"):
+        merged["room_type"] = llm_room_type
+    
+    # Always apply dimension updates from LLM (this is the primary reason for layout_updates)
+    for dim_key in ("width", "length", "area", "height", "confidence"):
+        if dim_key in normalized and normalized[dim_key] is not None:
+            merged[dim_key] = normalized[dim_key]
+    
+    # Preserve critical existing fields that LLM shouldn't override
+    merged["room_id"] = existing_room.get("room_id") or normalized.get("room_id")
+    merged.setdefault("room_type", "other")
+    
+    return merged
+
+
+def _merge_layout_updates(layout: dict, layout_updates: dict, layout_id: str) -> dict:
+    """
+    Merge LLM layout_updates into existing layout, preserving user edits.
+    Returns the merged layout dict.
+    """
+    updated_layout = {**layout}
+    
+    if "rooms" in layout_updates:
+        llm_rooms = layout_updates["rooms"]
+        existing_rooms = layout.get("rooms", [])
+        
+        # Build lookup maps for existing rooms
+        existing_by_id = {}
+        existing_by_name = {}
+        for r in existing_rooms:
+            rid = r.get("room_id")
+            if rid:
+                existing_by_id[rid] = r
+            rname = (r.get("name") or r.get("room") or "").lower().strip()
+            if rname:
+                existing_by_name[rname] = r
+        
+        merged_rooms = []
+        processed_existing_ids = set()
+        processed_existing_names = set()
+        
+        for llm_room in llm_rooms:
+            llm_rid = llm_room.get("room_id")
+            llm_rname = (llm_room.get("name") or llm_room.get("room", "")).lower().strip()
+            
+            existing = None
+            
+            # Match by room_id first
+            if llm_rid and llm_rid in existing_by_id:
+                existing = existing_by_id[llm_rid]
+                processed_existing_ids.add(llm_rid)
+                if existing.get("name") or existing.get("room"):
+                    processed_existing_names.add(
+                        (existing.get("name") or existing.get("room") or "").lower().strip()
+                    )
+            # Then match by name
+            elif llm_rname and llm_rname in existing_by_name:
+                existing = existing_by_name[llm_rname]
+                processed_existing_names.add(llm_rname)
+                if existing.get("room_id"):
+                    processed_existing_ids.add(existing["room_id"])
+            
+            merged_rooms.append(_normalize_llm_room(llm_room, existing))
+        
+        # Preserve existing rooms that weren't matched by LLM
+        for existing_room in existing_rooms:
+            rid = existing_room.get("room_id")
+            rname = (existing_room.get("name") or existing_room.get("room") or "").lower().strip()
+            already_processed = (
+                (rid and rid in processed_existing_ids) or
+                (rname and rname in processed_existing_names)
+            )
+            if not already_processed:
+                merged_rooms.append(existing_room)
+        
+        updated_layout["rooms"] = merged_rooms
+        
+        logger.info(
+            "layout_merge: existing=%d llm_returned=%d final=%d",
+            len(existing_rooms), len(llm_rooms), len(merged_rooms)
+        )
+    
+    if "total_area" in layout_updates:
+        updated_layout["total_area"] = layout_updates["total_area"]
+    if "layout_type" in layout_updates:
+        updated_layout["layout_type"] = layout_updates["layout_type"]
+    
+    # Preserve layout_id and other metadata
+    updated_layout["layout_id"] = layout_id
+    
+    # Update cache
+    _LAYOUT_STORE[layout_id] = updated_layout
+    logger.info("layout_merge: stored layout_id=%s rooms=%d", layout_id, len(updated_layout.get("rooms", [])))
+    
+    return updated_layout
+
+
 def _safe_log_text(s: str, max_len: int) -> str:
     """Avoid logging base64 image data (data: URLs) or huge content."""
     s = s or ""
@@ -259,71 +398,7 @@ def advisor_chat(req: AdvisorChatRequest):
 
     # Merge LLM layout updates if present
     if layout_updates and req.layout_id:
-        updated_layout = {**layout}  # Preserve existing layout
-        
-        if "rooms" in layout_updates:
-            # Intelligent merge: LLM should return ALL rooms (existing + new/updated)
-            # But if LLM only returns new rooms, merge them with existing
-            llm_rooms = layout_updates["rooms"]
-            existing_rooms = layout.get("rooms", [])
-            
-            if len(llm_rooms) >= len(existing_rooms):
-                # LLM returned full list (or more) - use it
-                updated_layout["rooms"] = llm_rooms
-            else:
-                # LLM returned only new/updated rooms - merge intelligently
-                # Match by room_id or name, add new ones
-                existing_by_id = {r.get("room_id"): r for r in existing_rooms if r.get("room_id")}
-                existing_by_name = {r.get("name", r.get("room", "")).lower(): r for r in existing_rooms}
-                
-                merged_rooms = []
-                processed_ids = set()
-                
-                # First, add/update rooms from LLM
-                for llm_room in llm_rooms:
-                    room_id = llm_room.get("room_id")
-                    room_name = (llm_room.get("name") or llm_room.get("room", "")).lower()
-                    
-                    if room_id and room_id in existing_by_id:
-                        # Update existing room by ID, but preserve user edits to name/room_type
-                        existing = existing_by_id[room_id]
-                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
-                        merged_rooms.append(merged)
-                        processed_ids.add(room_id)
-                    elif room_name and room_name in existing_by_name:
-                        # Update existing room by name, but preserve user edits to name/room_type
-                        existing = existing_by_name[room_name]
-                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
-                        merged_rooms.append(merged)
-                        if existing.get("room_id"):
-                            processed_ids.add(existing["room_id"])
-                    else:
-                        # New room - add it
-                        merged_rooms.append(llm_room)
-                
-                # Then, preserve existing rooms that weren't updated
-                for existing_room in existing_rooms:
-                    room_id = existing_room.get("room_id")
-                    if room_id and room_id not in processed_ids:
-                        merged_rooms.append(existing_room)
-                
-                updated_layout["rooms"] = merged_rooms
-            
-            logger.info(
-                "advisor/chat merged rooms: existing=%d llm_returned=%d final=%d (user edits preserved)",
-                len(existing_rooms), len(llm_rooms), len(updated_layout["rooms"])
-            )
-        
-        if "total_area" in layout_updates:
-            updated_layout["total_area"] = layout_updates["total_area"]
-        if "layout_type" in layout_updates:
-            updated_layout["layout_type"] = layout_updates["layout_type"]
-        # Preserve layout_id and other fields
-        updated_layout["layout_id"] = req.layout_id
-        # Update cache
-        _LAYOUT_STORE[req.layout_id] = updated_layout
-        logger.info("advisor/chat merged LLM layout_updates layout_id=%s rooms=%d", req.layout_id, len(updated_layout.get("rooms", [])))
-        layout = updated_layout
+        layout = _merge_layout_updates(layout, layout_updates, req.layout_id)
 
     _log_conversation(_last_user_message(req.messages), reply, action)
     response = AdvisorChatResponse(
@@ -489,71 +564,7 @@ def advisor_chat_stream(req: AdvisorChatRequest):
 
     # Merge LLM layout updates if present (same logic as non-streaming endpoint)
     if layout_updates and req.layout_id:
-        updated_layout = {**layout}  # Preserve existing layout
-        
-        if "rooms" in layout_updates:
-            # Intelligent merge: LLM should return ALL rooms (existing + new/updated)
-            # But if LLM only returns new rooms, merge them with existing
-            llm_rooms = layout_updates["rooms"]
-            existing_rooms = layout.get("rooms", [])
-            
-            if len(llm_rooms) >= len(existing_rooms):
-                # LLM returned full list (or more) - use it
-                updated_layout["rooms"] = llm_rooms
-            else:
-                # LLM returned only new/updated rooms - merge intelligently
-                # Match by room_id or name, add new ones
-                existing_by_id = {r.get("room_id"): r for r in existing_rooms if r.get("room_id")}
-                existing_by_name = {r.get("name", r.get("room", "")).lower(): r for r in existing_rooms}
-                
-                merged_rooms = []
-                processed_ids = set()
-                
-                # First, add/update rooms from LLM
-                for llm_room in llm_rooms:
-                    room_id = llm_room.get("room_id")
-                    room_name = (llm_room.get("name") or llm_room.get("room", "")).lower()
-                    
-                    if room_id and room_id in existing_by_id:
-                        # Update existing room by ID, but preserve user edits to name/room_type
-                        existing = existing_by_id[room_id]
-                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
-                        merged_rooms.append(merged)
-                        processed_ids.add(room_id)
-                    elif room_name and room_name in existing_by_name:
-                        # Update existing room by name, but preserve user edits to name/room_type
-                        existing = existing_by_name[room_name]
-                        merged = {**llm_room, **existing}  # Existing (user edits) takes priority
-                        merged_rooms.append(merged)
-                        if existing.get("room_id"):
-                            processed_ids.add(existing["room_id"])
-                    else:
-                        # New room - add it
-                        merged_rooms.append(llm_room)
-                
-                # Then, preserve existing rooms that weren't updated
-                for existing_room in existing_rooms:
-                    room_id = existing_room.get("room_id")
-                    if room_id and room_id not in processed_ids:
-                        merged_rooms.append(existing_room)
-                
-                updated_layout["rooms"] = merged_rooms
-            
-            logger.info(
-                "advisor/chat/stream merged rooms: existing=%d llm_returned=%d final=%d (user edits preserved)",
-                len(existing_rooms), len(llm_rooms), len(updated_layout["rooms"])
-            )
-        
-        if "total_area" in layout_updates:
-            updated_layout["total_area"] = layout_updates["total_area"]
-        if "layout_type" in layout_updates:
-            updated_layout["layout_type"] = layout_updates["layout_type"]
-        # Preserve layout_id and other fields
-        updated_layout["layout_id"] = req.layout_id
-        # Update cache
-        _LAYOUT_STORE[req.layout_id] = updated_layout
-        logger.info("advisor/chat/stream merged LLM layout_updates layout_id=%s rooms=%d", req.layout_id, len(updated_layout.get("rooms", [])))
-        layout = updated_layout
+        layout = _merge_layout_updates(layout, layout_updates, req.layout_id)
 
     _log_conversation(_last_user_message(req.messages), reply, action)
     final = AdvisorChatResponse(

@@ -74,7 +74,18 @@ const LayoutSummary = ({ layout, imageUrl, onLayoutChange }: LayoutSummaryProps)
     if (!onLayoutChange) return;
     const nextRooms = rooms.map((r, i) => {
       if (i !== index) return r;
-      const next = { ...r, ...patch };
+      const next = {
+        ...r,        // Preserve all existing fields first
+        ...patch,    // Apply the update
+        // Explicitly preserve room_type — only override if patch contains it
+        room_type: patch.room_type ?? r.room_type ?? "other",
+      };
+      // Keep both "room" and "name" in sync when either is changed
+      if (patch.room !== undefined || patch.name !== undefined) {
+        const newName = patch.room ?? patch.name ?? r.room ?? r.name ?? "";
+        next.room = newName;
+        next.name = newName;
+      }
       // Always recalculate area from current width/length
       const w = typeof next.width === "number" ? next.width : (typeof r.width === "number" ? r.width : undefined);
       const ln = typeof next.length === "number" ? next.length : (typeof r.length === "number" ? r.length : undefined);

@@ -434,8 +434,12 @@ const ChatPanel = ({ onPlanGenerated, onLayoutAnalyzed, initialLayoutId, onLayou
         }
       } else if (currentLayout) {
         // No parser updates, but ensure cache has latest layout from panel edits
-        // This ensures panel → chat sync is preserved
-        api.upsertLayoutCache(currentLayout as unknown as Record<string, unknown>).catch(() => {});
+        // This ensures panel → chat sync is preserved (await so cache is updated before LLM call)
+        try {
+          await api.upsertLayoutCache(currentLayout as unknown as Record<string, unknown>);
+        } catch {
+          // Cache update failed, continue with message send
+        }
       }
     }
 

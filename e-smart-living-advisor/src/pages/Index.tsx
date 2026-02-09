@@ -108,8 +108,8 @@ const Index = () => {
                     }}
                     onLayoutAnalyzed={handleLayoutAnalyzed}
                     initialLayoutId={state?.layoutId ?? undefined}
-                    onLayoutFromChat={(layout) => {
-                      if (layout === null) {
+                    onLayoutFromChat={(chatLayout) => {
+                      if (chatLayout === null) {
                         // Clear layout and image
                         setLayout(null);
                         if (layoutImageUrl) {
@@ -118,7 +118,20 @@ const Index = () => {
                         }
                         return;
                       }
-                      setLayout(layout);
+                      // Normalize rooms: LLM may return "type" instead of "room_type"
+                      // and "name" instead of "room" -- ensure both fields are set
+                      const normalizedLayout = {
+                        ...chatLayout,
+                        rooms: (chatLayout.rooms ?? []).map((r: any) => ({
+                          ...r,
+                          room_type: r.room_type ?? r.type ?? "other",
+                          room: r.room ?? r.name ?? "Room",
+                          name: r.name ?? r.room ?? "Room",
+                        })),
+                      };
+                      setLayout(normalizedLayout);
+                      // Also update backend cache so next message uses the merged layout
+                      api.upsertLayoutCache(normalizedLayout as unknown as Record<string, unknown>).catch(() => {});
                     }}
                     currentLayout={layout}
                     onLayoutUpdate={handleLayoutChange}
