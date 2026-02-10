@@ -5,6 +5,7 @@ python-multipart==0.0.20
 sse-starlette==2.1.3
 orjson==3.10.12
 openai>=1.0.0
+requests>=2.31.0
 pymupdf>=1.24.0
 python-dotenv>=1.0.0
 # Deterministic layout pipeline (render → preprocess → OCR → walls → rooms → scale → grounding)

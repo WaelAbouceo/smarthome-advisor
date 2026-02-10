@@ -13,6 +13,7 @@ from app.core.logging import get_logger
 from app.core.llm_call_logger import log_llm_call
 from app.core.prompts import get_prompt
 from app.models.layout import LayoutAnalysis
+from app.services.llm.llm_openai import _openai_client, vision_model_name
 
 logger = get_logger("layout.vision")
 
@@ -50,15 +51,6 @@ Reply with ONLY a valid JSON object (no markdown, no extra text) with this exact
 - mentioned_spaces_area: Sum of all room areas you listed. Same unit.
 - unassigned_space: Estimate for walls, corridors, thickness; or "unknown" if not inferrable. Same unit when numeric.
 - layout_confidence and size_confidence: 1.0 = very confident, 0.5 = uncertain."""
-
-# Lazy import to avoid requiring openai when key is not set
-def _openai_client():
-    from openai import OpenAI
-    from app.core.config import settings
-    if not settings.openai_api_key:
-        return None
-    return OpenAI(api_key=settings.openai_api_key)
-
 
 def _sha1_bytes(b: bytes) -> str:
     return hashlib.sha1(b).hexdigest()
@@ -109,7 +101,7 @@ def analyze_layout_with_vision(filename: str, content: bytes) -> LayoutAnalysis 
     # Vision LLM
     client = _openai_client()
     if not client:
-        logger.debug("vision skipped: no OpenAI API key")
+        logger.debug("vision skipped: no LLM provider configured")
         return None
 
     # Normalize to image bytes
@@ -137,7 +129,7 @@ def analyze_layout_with_vision(filename: str, content: bytes) -> LayoutAnalysis 
     raw = ""
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o",
+            model=vision_model_name(),
             messages=[
                 {
                     "role": "user",

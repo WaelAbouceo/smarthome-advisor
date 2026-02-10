@@ -9,11 +9,11 @@ import json
 import re
 from typing import Any
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.llm_call_logger import log_llm_call
 from app.core.prompts import get_prompt
 from app.models.layout import LayoutAnalysis
+from app.services.llm.llm_openai import _openai_client, chat_model_name
 
 logger = get_logger("layout.description")
 
@@ -50,19 +50,6 @@ Reply with ONLY a valid JSON object (no markdown, no extra text) with this exact
 - unassigned_space: rough estimate for walls/circulation if total and room sum known; else "unknown" or null.
 - layout_confidence: 0.7–1.0 if clear, lower if vague. If no entry points mentioned, use ["Main entrance"]."""
 
-
-
-def _openai_client():
-    if not settings.openai_api_key:
-        return None
-    try:
-        from openai import OpenAI
-        return OpenAI(api_key=settings.openai_api_key)
-    except Exception as e:
-        logger.debug("OpenAI client init failed: %s", e)
-        return None
-
-
 def _layout_id_from_description(description: str) -> str:
     return f"layout_desc_{hashlib.sha1(description.encode()).hexdigest()[:12]}"
 
@@ -79,14 +66,14 @@ def extract_layout_from_description(description: str) -> LayoutAnalysis | None:
 
     client = _openai_client()
     if not client:
-        logger.debug("layout from description skipped: no OpenAI API key")
+        logger.debug("layout from description skipped: no LLM provider configured")
         return None
 
     prompt = get_prompt("layout_description") or _LAYOUT_DESCRIPTION_PROMPT_FALLBACK
 
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=chat_model_name(),
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": f"Customer description:\n\n{description}\n\nExtract the layout as JSON."},

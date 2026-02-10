@@ -36,6 +36,13 @@ class Settings(BaseModel):
     app_name: str = "SmartHome Advisor API"
     # Optional: set OPENAI_API_KEY to use real LLM + multimodal layout analysis (vision)
     openai_api_key: str | None = _get_openai_key()
+    llm_provider: str = (os.environ.get("LLM_PROVIDER", "openai") or "openai").strip().lower()
+    openai_chat_model: str = (os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini") or "gpt-4o-mini").strip()
+    openai_vision_model: str = (os.environ.get("OPENAI_VISION_MODEL", "gpt-4o") or "gpt-4o").strip()
+    ollama_base_url: str | None = (os.environ.get("OLLAMA_BASE_URL") or "").strip() or None
+    ollama_token: str | None = (os.environ.get("OLLAMA_TOKEN") or "").strip() or None
+    ollama_chat_model: str = (os.environ.get("OLLAMA_CHAT_MODEL", "llama4:scout") or "llama4:scout").strip()
+    ollama_vision_model: str = (os.environ.get("OLLAMA_VISION_MODEL", "llama4:scout") or "llama4:scout").strip()
     api_prefix: str = "/api/v1"
     data_dir: Path = Path(__file__).resolve().parents[3] / "data"  # repo_root/data
     prompts_dir: Path = Path(__file__).resolve().parents[2] / "prompts"  # backend/prompts

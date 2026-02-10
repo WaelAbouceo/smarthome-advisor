@@ -354,7 +354,7 @@ def advisor_chat(req: AdvisorChatRequest):
     if result is None:
         raise HTTPException(
             status_code=503,
-            detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+            detail="Advisor is temporarily unavailable. Please ensure your LLM provider is configured.",
         )
     reply, action, layout_updates = result
 
@@ -392,7 +392,7 @@ def advisor_chat(req: AdvisorChatRequest):
         if result is None:
             raise HTTPException(
                 status_code=503,
-                detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+                detail="Advisor is temporarily unavailable. Please ensure your LLM provider is configured.",
             )
         reply, action, layout_updates = result
 
@@ -482,7 +482,7 @@ def advisor_chat_stream(req: AdvisorChatRequest):
     if result is None:
         raise HTTPException(
             status_code=503,
-            detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+            detail="Advisor is temporarily unavailable. Please ensure your LLM provider is configured.",
         )
     reply, action, layout_updates = result
 
@@ -520,7 +520,7 @@ def advisor_chat_stream(req: AdvisorChatRequest):
     if result is None:
         raise HTTPException(
             status_code=503,
-            detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+            detail="Advisor is temporarily unavailable. Please ensure your LLM provider is configured.",
         )
     reply, action, layout_updates = result
 
@@ -558,7 +558,7 @@ def advisor_chat_stream(req: AdvisorChatRequest):
         if result is None:
             raise HTTPException(
                 status_code=503,
-                detail="Advisor is temporarily unavailable. Please ensure OPENAI_API_KEY is configured.",
+                detail="Advisor is temporarily unavailable. Please ensure your LLM provider is configured.",
             )
         reply, action, layout_updates = result
 

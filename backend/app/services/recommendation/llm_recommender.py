@@ -6,6 +6,7 @@ import json
 import re
 from typing import Dict, Any, List, Tuple, Optional
 from app.models.advisor import RecommendationItem
+from app.core.config import settings
 from app.core.prompts import get_prompt
 from app.core.logging import get_logger
 from app.services.recommendation.rag_retriever import retrieve_relevant_knowledge
@@ -100,8 +101,9 @@ def _try_llm_recommendations(
         
         # Call LLM
         logger.debug("Calling LLM for recommendations")
+        model_name = settings.ollama_chat_model if settings.llm_provider == "ollama" else settings.openai_chat_model
         response = llm_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model_name,
             messages=[{"role": "user", "content": system_prompt}],
             response_format={"type": "json_object"},
             max_tokens=1000,

@@ -12,8 +12,8 @@ def _sha1_bytes(b: bytes) -> str:
 
 def analyze_layout_bytes(filename: str, content: bytes) -> LayoutAnalysis:
     """
-    Analyze uploaded floor plan using vision LLM (GPT-4o).
-    If vision analysis fails or OPENAI_API_KEY is not set, return an "unanalyzed" 
+    Analyze uploaded floor plan using the configured vision LLM provider.
+    If vision analysis fails or no LLM provider is configured, return an "unanalyzed"
     layout so the advisor can ask the user to describe their home in chat.
     """
     logger.debug("analyze_layout_bytes filename=%s size=%d", filename, len(content))

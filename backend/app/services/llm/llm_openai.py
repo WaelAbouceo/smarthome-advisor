@@ -5,8 +5,11 @@ whether to ask a question or offer the personalized plan (premium smart home des
 from __future__ import annotations
 import json
 import re
+from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
+from urllib.parse import urljoin
 
+import requests
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.llm_call_logger import log_llm_call
@@ -18,7 +21,142 @@ logger = get_logger("llm.openai")
 AdvisorResult = Tuple[str, str, Dict[str, Any] | None]  # (reply, "ask" | "offer_plan", layout_updates or None)
 
 
+def chat_model_name() -> str:
+    if settings.llm_provider == "ollama":
+        return settings.ollama_chat_model
+    return settings.openai_chat_model
+
+
+def vision_model_name() -> str:
+    if settings.llm_provider == "ollama":
+        return settings.ollama_vision_model
+    return settings.openai_vision_model
+
+
+@dataclass
+class _CompatMessage:
+    content: str
+
+
+@dataclass
+class _CompatChoice:
+    message: _CompatMessage
+
+
+@dataclass
+class _CompatResponse:
+    choices: List[_CompatChoice]
+
+
+class _CompatCompletions:
+    def __init__(self, parent: "_OllamaCompatClient"):
+        self._parent = parent
+
+    def create(self, model: str, messages: List[Dict[str, Any]], max_tokens: int = 1024, temperature: float = 0.2, response_format: Dict[str, Any] | None = None):  # noqa: ARG002
+        text, images = self._parent._messages_to_prompt_and_images(messages)
+        payload: Dict[str, Any] = {
+            "model": model or self._parent.chat_model,
+            "prompt": text,
+            "stream": False,
+            "options": {
+                "num_predict": max_tokens,
+                "temperature": temperature,
+            },
+        }
+        if images:
+            payload["images"] = images
+            if not payload["model"]:
+                payload["model"] = self._parent.vision_model
+
+        data = self._parent._post_generate(payload)
+        content = (data.get("response") or "").strip()
+        return _CompatResponse(choices=[_CompatChoice(message=_CompatMessage(content=content))])
+
+
+class _CompatChat:
+    def __init__(self, parent: "_OllamaCompatClient"):
+        self.completions = _CompatCompletions(parent)
+
+
+class _OllamaCompatClient:
+    def __init__(self, base_url: str, token: str | None, chat_model: str, vision_model: str):
+        self.base_url = base_url.rstrip("/") + "/"
+        self.token = token
+        self.chat_model = chat_model
+        self.vision_model = vision_model
+        self.session = requests.Session()
+        self.chat = _CompatChat(self)
+        self._bootstrapped = False
+
+    def _bootstrap(self) -> None:
+        if self._bootstrapped:
+            return
+        params = {"token": self.token} if self.token else None
+        resp = self.session.get(self.base_url, params=params, timeout=60)
+        resp.raise_for_status()
+        self._bootstrapped = True
+
+    def _post_generate(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        self._bootstrap()
+        url = urljoin(self.base_url, "api/generate")
+        resp = self.session.post(url, json=payload, timeout=600)
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise ValueError("ollama response must be a JSON object")
+        return data
+
+    @staticmethod
+    def _messages_to_prompt_and_images(messages: List[Dict[str, Any]]) -> Tuple[str, List[str]]:
+        lines: List[str] = []
+        images: List[str] = []
+        for m in messages or []:
+            role = (m.get("role") or "user").upper()
+            content = m.get("content")
+            if isinstance(content, str):
+                if content.strip():
+                    lines.append(f"{role}: {content.strip()}")
+                continue
+            if isinstance(content, list):
+                text_parts: List[str] = []
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    ptype = part.get("type")
+                    if ptype == "text":
+                        ptext = (part.get("text") or "").strip()
+                        if ptext:
+                            text_parts.append(ptext)
+                    elif ptype == "image_url":
+                        raw_url = (part.get("image_url") or {}).get("url") if isinstance(part.get("image_url"), dict) else None
+                        if isinstance(raw_url, str) and raw_url.startswith("data:"):
+                            marker = ";base64,"
+                            idx = raw_url.find(marker)
+                            if idx != -1:
+                                images.append(raw_url[idx + len(marker):])
+                if text_parts:
+                    lines.append(f"{role}: {' '.join(text_parts)}")
+        if not lines:
+            lines.append("USER: Please respond.")
+        return "\n\n".join(lines), images
+
+
 def _openai_client():
+    if settings.llm_provider == "ollama":
+        if not settings.ollama_base_url:
+            logger.debug("Ollama client init skipped: OLLAMA_BASE_URL is not set")
+            return None
+        try:
+            return _OllamaCompatClient(
+                base_url=settings.ollama_base_url,
+                token=settings.ollama_token,
+                chat_model=settings.ollama_chat_model,
+                vision_model=settings.ollama_vision_model,
+            )
+        except Exception as e:
+            logger.debug("Ollama client init failed: %s", e)
+            return None
+
     if not settings.openai_api_key:
         return None
     try:
@@ -267,9 +405,9 @@ def generate_advisor_response(
             openai_messages.append({"role": role, "content": content})
 
     try:
-        logger.debug("calling OpenAI advisor (agentic)")
+        logger.debug("calling advisor LLM provider=%s", settings.llm_provider)
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=chat_model_name(),
             messages=openai_messages,
             max_tokens=600,
             response_format={"type": "json_object"},
